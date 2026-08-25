@@ -323,6 +323,26 @@ export const levelGain = (base: number, lv: number) => base * Math.pow(LEVEL_GRO
 export const levelTotal = (base: number, lv: number) =>
   lv <= 0 ? 0 : (base * (Math.pow(LEVEL_GROWTH, lv) - 1)) / (LEVEL_GROWTH - 1);
 
+/** Следующее улучшение в категории открывается на этом уровне предыдущего */
+export const UPGRADE_UNLOCK_LV = 5;
+
+/** Сколько улучшений в цепочке уже открыто (первое всегда доступно). */
+export function unlockedCount(defs: { id: string }[], lv: Record<string, number>): number {
+  let n = 1;
+  for (let i = 0; i < defs.length - 1; i++) {
+    if ((lv[defs[i].id] ?? 0) >= UPGRADE_UNLOCK_LV) n += 1;
+    else break;
+  }
+  return Math.min(n, defs.length);
+}
+
+/** Можно ли покупать улучшение: предыдущее в той же категории прокачано до порога. */
+export function isUpgradeUnlocked(defs: { id: string }[], id: string, lv: Record<string, number>): boolean {
+  const i = defs.findIndex((d) => d.id === id);
+  if (i <= 0) return i === 0;
+  return (lv[defs[i - 1].id] ?? 0) >= UPGRADE_UNLOCK_LV;
+}
+
 // ── Прокачка клика ────────────────────────────────────────────
 
 export interface UpgradeDef {

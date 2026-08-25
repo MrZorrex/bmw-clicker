@@ -48,8 +48,10 @@ import {
   LEVEL_GROWTH,
   MODELS,
   RARITY_META,
+  UPGRADE_UNLOCK_LV,
   levelGain,
   levelTotal,
+  unlockedCount,
   type BotUpgradeDef,
   type CaseDef,
   type CardDef,
@@ -372,7 +374,37 @@ function CritRow({ def, game }: { def: CritUpgradeDef; game: Game }) {
   );
 }
 
+function NextUnlockHint({
+  defs,
+  lv,
+}: {
+  defs: { id: string; name: string }[];
+  lv: Record<string, number>;
+}) {
+  const open = unlockedCount(defs, lv);
+  if (open >= defs.length) return null;
+  const prev = defs[open - 1];
+  const have = lv[prev.id] ?? 0;
+  return (
+    <div className="flex items-center gap-2 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-3 py-2.5">
+      <Lock className="size-3.5 shrink-0 text-white/25" />
+      <span className="text-[10.5px] font-semibold leading-snug text-white/30">
+        Прокачай «{prev.name}» до {UPGRADE_UNLOCK_LV} ур., чтобы открыть следующее{" "}
+        <span className="tabular text-white/45">
+          ({have}/{UPGRADE_UNLOCK_LV})
+        </span>
+      </span>
+    </div>
+  );
+}
+
 function UpgradesTab({ game }: { game: Game }) {
+  const { s } = game;
+  const clickOpen = unlockedCount(CLICK_UPGRADES, s.clickLv);
+  const critOpen = unlockedCount(CRIT_UPGRADES, s.critLv);
+  const autoOpen = unlockedCount(AUTO_UPGRADES, s.autoLv);
+  const botOpen = unlockedCount(BOT_UPGRADES, s.botLv);
+
   return (
     <div className="flex flex-col gap-4">
       <section>
@@ -380,9 +412,10 @@ function UpgradesTab({ game }: { game: Game }) {
           <MousePointerClick className="size-3.5" /> Сила клика
         </h3>
         <div className="flex flex-col gap-2">
-          {CLICK_UPGRADES.map((d) => (
+          {CLICK_UPGRADES.slice(0, clickOpen).map((d) => (
             <UpgradeRow key={d.id} def={d} kind="click" game={game} />
           ))}
+          <NextUnlockHint defs={CLICK_UPGRADES} lv={s.clickLv} />
         </div>
         <p className="mt-1.5 px-1 text-[10px] font-medium leading-relaxed text-white/30">
           Каждый следующий уровень апгрейда сильнее предыдущего на {Math.round((LEVEL_GROWTH - 1) * 100)}%.
@@ -398,9 +431,10 @@ function UpgradesTab({ game }: { game: Game }) {
           </span>
         </h3>
         <div className="flex flex-col gap-2">
-          {CRIT_UPGRADES.map((d) => (
+          {CRIT_UPGRADES.slice(0, critOpen).map((d) => (
             <CritRow key={d.id} def={d} game={game} />
           ))}
+          <NextUnlockHint defs={CRIT_UPGRADES} lv={s.critLv} />
         </div>
         <p className="mt-1.5 px-1 text-[10px] font-medium leading-relaxed text-white/30">
           Крит срабатывает случайно и умножает доход с клика. Работает и на автокликах.
@@ -411,9 +445,10 @@ function UpgradesTab({ game }: { game: Game }) {
           <TrendingUp className="size-3.5" /> Пассивный доход
         </h3>
         <div className="flex flex-col gap-2">
-          {AUTO_UPGRADES.map((d) => (
+          {AUTO_UPGRADES.slice(0, autoOpen).map((d) => (
             <UpgradeRow key={d.id} def={d} kind="auto" game={game} />
           ))}
+          <NextUnlockHint defs={AUTO_UPGRADES} lv={s.autoLv} />
         </div>
       </section>
       <section>
@@ -428,9 +463,10 @@ function UpgradesTab({ game }: { game: Game }) {
           )}
         </h3>
         <div className="flex flex-col gap-2">
-          {BOT_UPGRADES.map((d) => (
+          {BOT_UPGRADES.slice(0, botOpen).map((d) => (
             <BotRow key={d.id} def={d} game={game} />
           ))}
+          <NextUnlockHint defs={BOT_UPGRADES} lv={s.botLv} />
         </div>
         <p className="mt-1.5 px-1 text-[10px] font-medium leading-relaxed text-white/30">
           Автокликер кликает за тебя: каждый автоклик приносит столько же, сколько твой обычный клик.
