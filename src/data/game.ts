@@ -467,7 +467,7 @@ export const CARDS: CardDef[] = [
   { id: "m3e30c", name: "BMW M3 (E30)", rarity: "epic", pct: 0.11, img: "/models/m3e30.jpg", note: "Король DTM" },
   { id: "m5e34c", name: "BMW M5 (E34)", rarity: "epic", pct: 0.11, img: "/models/m5e34.jpg", note: "Ручная сборка, Гархинг" },
   { id: "z4m", name: "BMW Z4 M Coupé", rarity: "epic", pct: 0.11, img: "/models/bmwz4.jpg", note: "Двигатель S54 и улыбка" },
-  { id: "bot3000", name: "Автокликер X-3000", rarity: "epic", pct: 0, botPct: 0.6, note: "Запрещён в трёх странах" },
+  { id: "bot3000", name: "Автокликер X-3000", rarity: "epic", pct: 0, botPct: 0.6, img: "/cards/bot3000.jpg", note: "Запрещён в трёх странах" },
   { id: "goldtongue", name: "Золотой язык", rarity: "epic", pct: 0, critPct: 0.02, img: "/cards/goldtongue.jpg", note: "+2% к шансу крита" },
   { id: "m1c", name: "BMW M1", rarity: "legend", pct: 0.2, img: "/models/bmwm1.jpg", note: "Суперкар, рождённый M GmbH" },
   { id: "c507", name: "BMW 507", rarity: "legend", pct: 0.2, img: "/models/bmw507.jpg", note: "Родстер Элвиса Пресли" },
