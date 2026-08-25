@@ -33,7 +33,7 @@ export default function App() {
   const [unlock, setUnlock] = useState<CarModel | null>(null);
   const [gacha, setGacha] = useState<{ reward: Reward; caseDef: CaseDef } | null>(null);
   const [prestigeOpen, setPrestigeOpen] = useState(false);
-  const [showOffline, setShowOffline] = useState(game.offlineGain > 1);
+  const [showOffline, setShowOffline] = useState(game.offlineGain > 0);
   const [showIntro, setShowIntro] = useState(!game.s.introSeen);
 
   // ── SDK Яндекс Игр: готовность, разметка геймплея, паузы ──

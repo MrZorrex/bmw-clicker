@@ -57,12 +57,8 @@ export default function Header(p: HeaderProps) {
             <div className="m-stripes absolute inset-x-1.5 top-1.5 h-1 rounded-full" />
             <span className="font-display text-[9px] font-bold tracking-widest text-bmw-soft sm:text-[10px]">BMW</span>
           </div>
-          <div className="leading-tight">
-            <div className="font-display text-xs font-bold tracking-wide sm:text-sm">ПЕРЕКУП</div>
-            <div className="hidden text-[10px] font-medium text-white/45 sm:block">симулятор перекупщика</div>
-          </div>
-          {/* Кнопки звука и сброса — всегда рядом с лого */}
-          <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          {/* Кнопки стоят сразу после BMW-иконки: баланс ниже на мобильных и не наезжает на них. */}
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <button
               onClick={p.onToggleSound}
               className="grid size-8 place-items-center rounded-lg border border-white/10 bg-white/5 text-white/60 transition hover:bg-white/10 hover:text-white sm:size-9"
@@ -77,6 +73,10 @@ export default function Header(p: HeaderProps) {
             >
               <RotateCcw className="size-4" />
             </button>
+          </div>
+          <div className="leading-tight">
+            <div className="font-display text-xs font-bold tracking-wide sm:text-sm">ПЕРЕКУП</div>
+            <div className="hidden text-[10px] font-medium text-white/45 sm:block">симулятор перекупщика</div>
           </div>
         </div>
 

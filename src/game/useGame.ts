@@ -192,7 +192,7 @@ export function useGame() {
     const rate = autoCps + botC * clickPow;
     if (rate <= 0) return 0;
     const secs = Math.min(Math.max(0, (Date.now() - st.lastSeen) / 1000), 8 * 3600);
-    return rate * secs * 0.6;
+    return rate * secs * 0.01;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
