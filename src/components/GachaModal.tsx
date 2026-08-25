@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import confetti from "canvas-confetti";
-import { ChevronDown, Coins, Gem, Zap } from "lucide-react";
+import { ChevronDown, ChevronUp, Gem } from "lucide-react";
 import { CARDS, RARITY_META, type CaseDef, type CardDef } from "../data/game";
 import type { Reward } from "../game/useGame";
 import { fmtMoney } from "../game/format";
 import { CardFace } from "./Shop";
 import { sfxSpin, sfxWin } from "../game/sound";
 
-const CELL_W = 128;
+const CELL_W = 118;
+const CELL_H = 176;
 const CELL_GAP = 12;
 const STRIDE = CELL_W + CELL_GAP;
 const WIN_INDEX = 40;
@@ -32,14 +33,14 @@ function Cell({ v }: { v: Visual }) {
   if (v.kind === "cash")
     return (
       <div className="flex size-full flex-col items-center justify-center gap-1.5 rounded-xl border border-mint/25 bg-mint/[0.07]">
-        <Coins className="size-7 text-mint" />
+        <img src="/rewards/cash.jpg" alt="Кэш" className="h-[112px] w-full rounded-lg object-cover" />
         <span className="text-[9px] font-black uppercase tracking-widest text-mint/80">Кэш</span>
       </div>
     );
   if (v.kind === "boost")
     return (
       <div className="flex size-full flex-col items-center justify-center gap-1.5 rounded-xl border border-gold/25 bg-gold/[0.07]">
-        <Zap className="size-7 text-gold" />
+        <img src="/rewards/boost.jpg" alt="Буст" className="h-[112px] w-full rounded-lg object-cover" />
         <span className="tabular text-[9px] font-black uppercase tracking-widest text-gold/80">×{v.mult} буст</span>
       </div>
     );
@@ -69,6 +70,10 @@ export default function GachaModal({ reward, caseDef, onClose }: GachaModalProps
   const [phase, setPhase] = useState<"spin" | "reveal">("spin");
   const boxRef = useRef<HTMLDivElement>(null);
   const [targetX, setTargetX] = useState(0);
+  const recenter = () => {
+    const w = boxRef.current?.clientWidth ?? 640;
+    setTargetX(-(WIN_INDEX * STRIDE + CELL_W / 2 - w / 2));
+  };
 
   const strip = useMemo<Visual[]>(() => {
     const arr: Visual[] = Array.from({ length: TOTAL }, randomVisual);
@@ -83,8 +88,9 @@ export default function GachaModal({ reward, caseDef, onClose }: GachaModalProps
   }, [reward]);
 
   useEffect(() => {
-    const w = boxRef.current?.clientWidth ?? 640;
-    setTargetX(-(WIN_INDEX * STRIDE + CELL_W / 2 - w / 2));
+    recenter();
+    window.addEventListener("resize", recenter);
+    return () => window.removeEventListener("resize", recenter);
   }, []);
 
   useEffect(() => {
@@ -135,17 +141,17 @@ export default function GachaModal({ reward, caseDef, onClose }: GachaModalProps
 
         {phase === "spin" ? (
           <div className="relative py-6">
-            <div ref={boxRef} className="relative h-[168px] overflow-hidden">
+            <div ref={boxRef} className="relative h-[176px] overflow-hidden">
               <motion.div
                 className="absolute left-0 top-0 flex"
                 style={{ gap: CELL_GAP, paddingLeft: 0 }}
                 initial={{ x: 0 }}
                 animate={{ x: targetX }}
-                transition={{ duration: 4.6, ease: [0.12, 0.72, 0.06, 1] }}
+                transition={{ duration: 4.8, ease: [0.12, 0.72, 0.06, 1] }}
                 onAnimationComplete={() => setPhase("reveal")}
               >
                 {strip.map((v, i) => (
-                  <div key={i} style={{ width: CELL_W, height: 168 }} className="shrink-0">
+                  <div key={i} style={{ width: CELL_W, height: CELL_H }} className="shrink-0">
                     <Cell v={v} />
                   </div>
                 ))}
@@ -153,11 +159,10 @@ export default function GachaModal({ reward, caseDef, onClose }: GachaModalProps
               {/* рамки затемнения */}
               <div className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-night to-transparent" />
               <div className="pointer-events-none absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-night to-transparent" />
-              {/* указатель */}
-              <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-gradient-to-b from-transparent via-fuchsia-400 to-transparent" />
-            </div>
-            <div className="pointer-events-none absolute left-1/2 top-1 -translate-x-1/2">
-              <ChevronDown className="size-6 animate-bounce text-fuchsia-400" />
+              {/* Рамка CS:GO точно размера карточки, со стрелками сверху и снизу. */}
+              <div className="pointer-events-none absolute left-1/2 top-0 z-10 h-[176px] w-[118px] -translate-x-1/2 rounded-xl border-2 border-white shadow-[0_0_18px_rgba(255,255,255,.28)]" />
+              <ChevronUp className="pointer-events-none absolute left-1/2 top-[-10px] z-20 size-5 -translate-x-1/2 text-white drop-shadow-[0_0_5px_rgba(255,255,255,.8)]" />
+              <ChevronDown className="pointer-events-none absolute bottom-[-10px] left-1/2 z-20 size-5 -translate-x-1/2 text-white drop-shadow-[0_0_5px_rgba(255,255,255,.8)]" />
             </div>
           </div>
         ) : (
@@ -180,7 +185,11 @@ export default function GachaModal({ reward, caseDef, onClose }: GachaModalProps
                   reward.kind === "cash" ? "border-mint/30 bg-mint/10" : "border-gold/30 bg-gold/10"
                 }`}
               >
-                {reward.kind === "cash" ? <Coins className="size-12 text-mint" /> : <Zap className="size-12 text-gold" />}
+                <img
+                  src={reward.kind === "cash" ? "/rewards/cash.jpg" : "/rewards/boost.jpg"}
+                  alt={reward.kind === "cash" ? "Кэш" : "Буст"}
+                  className="size-full rounded-3xl object-cover p-1"
+                />
               </motion.div>
             )}
 

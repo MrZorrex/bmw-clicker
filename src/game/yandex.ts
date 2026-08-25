@@ -15,6 +15,18 @@ export interface YaPlayer {
   getData(keys?: string[]): Promise<Record<string, unknown>>;
 }
 
+export interface YaPurchase {
+  purchaseToken: string;
+  productID: string;
+  developerPayload?: string;
+}
+
+export interface YaPayments {
+  purchase(opts: { id: string; developerPayload?: string }): Promise<YaPurchase>;
+  getPurchases(): Promise<YaPurchase[]>;
+  consumePurchase(token: string): Promise<void>;
+}
+
 export interface YaSdk {
   features?: {
     LoadingAPI?: { ready: () => void };
@@ -22,6 +34,7 @@ export interface YaSdk {
   };
   getPlayer(opts?: { scopes?: boolean }): Promise<YaPlayer>;
   getStorage(): Promise<Storage>;
+  getPayments?(opts?: { signed?: boolean }): Promise<YaPayments>;
   on(event: string, cb: () => void): void;
   off?(event: string, cb: () => void): void;
   auth?: { openAuthDialog(): Promise<void> };
@@ -59,6 +72,27 @@ let readyCalled = false;
 let gameplayRunning = false;
 
 export const isYandex = () => ysdk !== null;
+
+/** IAP Яндекс Игр. Покупки доступны только на платформе, вне её это no-op. */
+export async function buyProduct(productId: string, developerPayload?: string): Promise<YaPurchase | null> {
+  try {
+    const payments = await ysdk?.getPayments?.({ signed: true });
+    return payments ? await payments.purchase({ id: productId, developerPayload }) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function consumeProduct(token: string): Promise<boolean> {
+  try {
+    const payments = await ysdk?.getPayments?.({ signed: true });
+    if (!payments) return false;
+    await payments.consumePurchase(token);
+    return true;
+  } catch {
+    return false;
+  }
+}
 export const getPlayerName = () => {
   try {
     return player?.isAuthorized() ? player.getName() : "";
