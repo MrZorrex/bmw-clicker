@@ -11,6 +11,7 @@ import {
   MODELS,
   PRESTIGE_BONUS,
   cardsByRarity,
+  isUpgradeUnlocked,
   levelTotal,
   type BotUpgradeDef,
   type CardDef,
@@ -293,7 +294,10 @@ export function useGame() {
   const buyUpgrade = useCallback(
     (def: UpgradeDef, kind: "click" | "auto"): boolean => {
       const map = kind === "click" ? "clickLv" : "autoLv";
-      const lv = (kind === "click" ? s.clickLv : s.autoLv)[def.id] ?? 0;
+      const chain = kind === "click" ? CLICK_UPGRADES : AUTO_UPGRADES;
+      const lvMap = kind === "click" ? s.clickLv : s.autoLv;
+      if (!isUpgradeUnlocked(chain, def.id, lvMap)) return false;
+      const lv = lvMap[def.id] ?? 0;
       const cost = upgradeCost(def, lv);
       if (s.money < cost) return false;
       setS((p) => ({
@@ -309,6 +313,7 @@ export function useGame() {
 
   const buyBot = useCallback(
     (def: BotUpgradeDef): boolean => {
+      if (!isUpgradeUnlocked(BOT_UPGRADES, def.id, s.botLv)) return false;
       const lv = s.botLv[def.id] ?? 0;
       const cost = upgradeCost(def, lv);
       if (s.money < cost) return false;
@@ -325,6 +330,7 @@ export function useGame() {
 
   const buyCrit = useCallback(
     (def: CritUpgradeDef): boolean => {
+      if (!isUpgradeUnlocked(CRIT_UPGRADES, def.id, s.critLv)) return false;
       const lv = s.critLv[def.id] ?? 0;
       if (lv >= def.maxLv) return false;
       const cost = upgradeCost(def, lv);

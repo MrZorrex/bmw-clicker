@@ -323,6 +323,26 @@ export const levelGain = (base: number, lv: number) => base * Math.pow(LEVEL_GRO
 export const levelTotal = (base: number, lv: number) =>
   lv <= 0 ? 0 : (base * (Math.pow(LEVEL_GROWTH, lv) - 1)) / (LEVEL_GROWTH - 1);
 
+/** Следующее улучшение в категории открывается на этом уровне предыдущего */
+export const UPGRADE_UNLOCK_LV = 5;
+
+/** Сколько улучшений в цепочке уже открыто (первое всегда доступно). */
+export function unlockedCount(defs: { id: string }[], lv: Record<string, number>): number {
+  let n = 1;
+  for (let i = 0; i < defs.length - 1; i++) {
+    if ((lv[defs[i].id] ?? 0) >= UPGRADE_UNLOCK_LV) n += 1;
+    else break;
+  }
+  return Math.min(n, defs.length);
+}
+
+/** Можно ли покупать улучшение: предыдущее в той же категории прокачано до порога. */
+export function isUpgradeUnlocked(defs: { id: string }[], id: string, lv: Record<string, number>): boolean {
+  const i = defs.findIndex((d) => d.id === id);
+  if (i <= 0) return i === 0;
+  return (lv[defs[i - 1].id] ?? 0) >= UPGRADE_UNLOCK_LV;
+}
+
 // ── Прокачка клика ────────────────────────────────────────────
 
 export interface UpgradeDef {
@@ -436,19 +456,19 @@ export interface CardDef {
 }
 
 export const CARDS: CardDef[] = [
-  { id: "kofe", name: "Кофе из салона", rarity: "common", pct: 0.015, note: "Клиент расслаблен — торг легче" },
-  { id: "elochka", name: "Пахучая ёлочка", rarity: "common", pct: 0.015, note: "Новая машина пахнет именно так" },
-  { id: "nomera", name: "Красивые номера", rarity: "common", pct: 0.015, note: "А777АА продают сами себя" },
+  { id: "kofe", name: "Кофе из салона", rarity: "common", pct: 0.015, img: "/cards/kofe.jpg", note: "Клиент расслаблен — торг легче" },
+  { id: "elochka", name: "Пахучая ёлочка", rarity: "common", pct: 0.015, img: "/cards/elochka.jpg", note: "Новая машина пахнет именно так" },
+  { id: "nomera", name: "Красивые номера", rarity: "common", pct: 0.015, img: "/cards/nomera.jpg", note: "А777АА продают сами себя" },
   { id: "turbo2002", name: "BMW 2002 Turbo", rarity: "rare", pct: 0.06, img: "/models/bmw2002.jpg", note: "Первый турбо серийник Европы" },
-  { id: "z1", name: "BMW Z1", rarity: "rare", pct: 0.06, note: "Двери уезжают вниз. Магия" },
+  { id: "z1", name: "BMW Z1", rarity: "rare", pct: 0.06, img: "/cards/z1.jpg", note: "Двери уезжают вниз. Магия" },
   { id: "csi850", name: "BMW 850CSi", rarity: "rare", pct: 0.06, img: "/models/e850i.jpg", note: "V12, механика, легенда 90-х" },
-  { id: "mechhand", name: "Механическая рука", rarity: "rare", pct: 0, botPct: 0.35, note: "Автокликер работает бодрее" },
-  { id: "luckycoin", name: "Счастливая монета", rarity: "rare", pct: 0, critPct: 0.01, note: "+1% к шансу крита" },
+  { id: "mechhand", name: "Механическая рука", rarity: "rare", pct: 0, botPct: 0.35, img: "/cards/mechhand.jpg", note: "Автокликер работает бодрее" },
+  { id: "luckycoin", name: "Счастливая монета", rarity: "rare", pct: 0, critPct: 0.01, img: "/cards/luckycoin.jpg", note: "+1% к шансу крита" },
   { id: "m3e30c", name: "BMW M3 (E30)", rarity: "epic", pct: 0.11, img: "/models/m3e30.jpg", note: "Король DTM" },
   { id: "m5e34c", name: "BMW M5 (E34)", rarity: "epic", pct: 0.11, img: "/models/m5e34.jpg", note: "Ручная сборка, Гархинг" },
   { id: "z4m", name: "BMW Z4 M Coupé", rarity: "epic", pct: 0.11, img: "/models/bmwz4.jpg", note: "Двигатель S54 и улыбка" },
-  { id: "bot3000", name: "Автокликер X-3000", rarity: "epic", pct: 0, botPct: 0.6, note: "Запрещён в трёх странах" },
-  { id: "goldtongue", name: "Золотой язык", rarity: "epic", pct: 0, critPct: 0.02, note: "+2% к шансу крита" },
+  { id: "bot3000", name: "Автокликер X-3000", rarity: "epic", pct: 0, botPct: 0.6, img: "/cards/bot3000.jpg", note: "Запрещён в трёх странах" },
+  { id: "goldtongue", name: "Золотой язык", rarity: "epic", pct: 0, critPct: 0.02, img: "/cards/goldtongue.jpg", note: "+2% к шансу крита" },
   { id: "m1c", name: "BMW M1", rarity: "legend", pct: 0.2, img: "/models/bmwm1.jpg", note: "Суперкар, рождённый M GmbH" },
   { id: "c507", name: "BMW 507", rarity: "legend", pct: 0.2, img: "/models/bmw507.jpg", note: "Родстер Элвиса Пресли" },
   { id: "cslc", name: "BMW 3.0 CSL «Бэтмобиль»", rarity: "legend", pct: 0.2, img: "/models/csl30.jpg", note: "Антикрыло, победы, культ" },
