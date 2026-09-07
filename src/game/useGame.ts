@@ -21,7 +21,9 @@ import {
   type UpgradeDef,
 } from "../data/game";
 import { setSoundEnabled, sfxBuy, sfxWin } from "./sound";
-import { cloudSave, getCloudSnapshot } from "./yandex";
+import { cloudSave, getCloudSnapshot, getSdkLang } from "./yandex";
+import { isLang, resolveLang, type Lang } from "../i18n";
+import { CASH_PILE_FALLBACK_BASE_MULT, CASH_PILE_SHARE, VIP_PERK_BONUS, VIP_PERK_ID } from "../data/products";
 
 // ─── Типы ────────────────────────────────────────────────────
 
@@ -43,6 +45,16 @@ export interface GameState {
   sound: boolean;
   introSeen: boolean;
   lastSeen: number;
+  /** Постоянные перки из инап-покупок: id товара → 1. Переживают новые круги. */
+  perks: Record<string, number>;
+  /** Язык интерфейса. Сохраняется и имеет приоритет над автоопределением SDK. */
+  lang: Lang;
+  /**
+   * Токены покупок, выдача по которым уже произведена. Нужны, чтобы при
+   * обрыве сети между выдачей и консумацией не выдать товар дважды:
+   * повторная проверка необработанных покупок такие токены только консумирует.
+   */
+  grantedTokens: Record<string, number>;
 }
 
 export type Reward =
@@ -50,7 +62,7 @@ export type Reward =
   | { kind: "boost"; mult: number; secs: number }
   | { kind: "card"; card: CardDef; dup: boolean; dupCash: number };
 
-const SAVE_KEY = "bmw-perekup-save-v1";
+export const SAVE_KEY = "bmw-perekup-save-v1";
 
 const initialState = (): GameState => ({
   money: 0,
@@ -70,6 +82,9 @@ const initialState = (): GameState => ({
   sound: true,
   introSeen: false,
   lastSeen: Date.now(),
+  perks: {},
+  lang: resolveLang(undefined, getSdkLang()),
+  grantedTokens: {},
 });
 
 function readLocal(): Partial<GameState> | null {
@@ -104,6 +119,9 @@ function loadState(): { state: GameState; isFresh: boolean } {
       ...base,
       ...best,
       modelIndex: Math.min(Math.max(0, best.modelIndex ?? 0), MODELS.length - 1),
+      lang: isLang(best.lang) ? best.lang : base.lang,
+      grantedTokens: best.grantedTokens ?? {},
+      perks: best.perks ?? {},
     },
     isFresh: false,
   };
@@ -127,6 +145,30 @@ export function useGame() {
   const loaded = useMemo(loadState, []);
   const [s, setS] = useState<GameState>(loaded.state);
 
+  // Пауза игрового процесса: полноэкранная реклама, стартовый рекламный блок
+  // платформы, диалог покупки (п. 4.7). Доход не капает, таймер буста заморожен.
+  const [paused, setPausedState] = useState(false);
+  const pausedRef = useRef(false);
+  const pausedBoostRef = useRef(0);
+  const pausedAtRef = useRef(0);
+  const setPaused = useCallback((v: boolean) => {
+    if (v === pausedRef.current) return;
+    pausedRef.current = v;
+    setPausedState(v);
+    if (v) {
+      pausedAtRef.current = Date.now();
+      pausedBoostRef.current = stateRef.current.boostUntil;
+    } else {
+      const delta = Date.now() - pausedAtRef.current;
+      const frozenBoost = pausedBoostRef.current;
+      if (delta > 0 && frozenBoost > 0) {
+        // сдвигаем только буст, переживший паузу без изменений (выданный
+        // наградой за рекламу во время паузы продлевать не нужно)
+        setS((p) => (p.boostUntil === frozenBoost ? { ...p, boostUntil: p.boostUntil + delta } : p));
+      }
+    }
+  }, []);
+
   useEffect(() => {
     setSoundEnabled(s.sound);
   }, [s.sound]);
@@ -147,6 +189,8 @@ export function useGame() {
   const prestigeMult = 1 + PRESTIGE_BONUS * s.prestige;
   const boostActive = s.boostUntil > Date.now();
   const boostF = boostActive ? s.boostMult : 1;
+  // постоянный перк из инап-покупки «Перекуп года»
+  const perkMult = 1 + VIP_PERK_BONUS * (s.perks[VIP_PERK_ID] ?? 0);
 
   // крит: базовый шанс + прокачка + карты удачи
   const critCardPct = useMemo(
@@ -162,13 +206,13 @@ export function useGame() {
   const critMult = CRIT_BASE_MULT + critPowerDef.step * (s.critLv[critPowerDef.id] ?? 0);
 
   const clickPower = useMemo(
-    () => model.base * (1 + sumPct(CLICK_UPGRADES, s.clickLv)) * cardMult * boostF * prestigeMult,
-    [model, s.clickLv, cardMult, boostF, prestigeMult]
+    () => model.base * (1 + sumPct(CLICK_UPGRADES, s.clickLv)) * cardMult * boostF * prestigeMult * perkMult,
+    [model, s.clickLv, cardMult, boostF, prestigeMult, perkMult]
   );
 
   const cps = useMemo(
-    () => model.base * sumPct(AUTO_UPGRADES, s.autoLv) * cardMult * boostF * prestigeMult,
-    [model, s.autoLv, cardMult, boostF, prestigeMult]
+    () => model.base * sumPct(AUTO_UPGRADES, s.autoLv) * cardMult * boostF * prestigeMult * perkMult,
+    [model, s.autoLv, cardMult, boostF, prestigeMult, perkMult]
   );
 
   // автокликер
@@ -209,6 +253,7 @@ export function useGame() {
   incomeRef.current = cps + botIncome;
   useEffect(() => {
     const iv = setInterval(() => {
+      if (pausedRef.current) return;
       setS((p) => {
         const expired = p.boostUntil !== 0 && p.boostUntil <= Date.now();
         const gain = incomeRef.current / 10;
@@ -245,10 +290,13 @@ export function useGame() {
       if (document.visibilityState === "hidden") save(true, true);
     };
     const onUnload = () => save(true, true);
+    // п. 1.9 — прогресс не теряется при смене ориентации экрана
+    const onOrient = () => save(true, true);
 
     document.addEventListener("visibilitychange", onHide);
     window.addEventListener("pagehide", onUnload);
     window.addEventListener("beforeunload", onUnload);
+    window.addEventListener("orientationchange", onOrient);
 
     return () => {
       clearInterval(ivLocal);
@@ -256,6 +304,7 @@ export function useGame() {
       document.removeEventListener("visibilitychange", onHide);
       window.removeEventListener("pagehide", onUnload);
       window.removeEventListener("beforeunload", onUnload);
+      window.removeEventListener("orientationchange", onOrient);
     };
   }, []);
 
@@ -346,13 +395,14 @@ export function useGame() {
     [s.money, s.critLv]
   );
 
-  /** Каждое открытие делает контейнер дороже — рандом не должен быть бесконечно выгодным. */
+  /**
+   * Цена контейнера НЕ привязана к машине: startPrice × priceGrowth^открытия —
+   * прогрессия как у прокачки. Каждое открытие делает контейнер дороже,
+   * поэтому рандом не бесконечно выгоден, но смена авто цену не дёргает.
+   */
   const casePrice = useCallback(
-    (c: CaseDef) => {
-      const opens = s.caseOpens[c.id] ?? 0;
-      return Math.max(c.minPrice, c.mult * model.base) * Math.pow(c.priceGrowth, opens);
-    },
-    [model, s.caseOpens]
+    (c: CaseDef) => c.startPrice * Math.pow(c.priceGrowth, s.caseOpens[c.id] ?? 0),
+    [s.caseOpens]
   );
 
   const rollCase = useCallback(
@@ -422,12 +472,48 @@ export function useGame() {
     setS((p) => ({ ...p, adReadyAt: Date.now() + AD_COOLDOWN_SECS * 1000 }));
   }, []);
 
+  // ── Инап-покупки ────────────────────────────────────────────
+
+  /** Сумма выдачи расходного товара cash_pile: доля цены следующей машины. */
+  const cashPileAmount = useCallback((): number => {
+    const base = next ? next.price * CASH_PILE_SHARE : model.base * CASH_PILE_FALLBACK_BASE_MULT;
+    return Math.max(1, Math.round(base));
+  }, [next, model]);
+
+  /** Начислить наличные (расходная покупка). */
+  const grantCash = useCallback((amount: number) => {
+    setS((p) => ({ ...p, money: p.money + amount, totalEarned: p.totalEarned + amount }));
+    sfxWin();
+  }, []);
+
+  /** Активировать постоянный перк (идемпотентно — для постоянных покупок). */
+  const grantPerk = useCallback((id: string) => {
+    setS((p) => (p.perks[id] ? p : { ...p, perks: { ...p.perks, [id]: 1 } }));
+    sfxWin();
+  }, []);
+
+  /** Проверка / отметка выданных покупок — защита от двойной выдачи (п. 1.13.1). */
+  const isTokenGranted = useCallback(
+    (token: string) => !!stateRef.current.grantedTokens[token],
+    []
+  );
+  const markTokenGranted = useCallback((token: string) => {
+    setS((p) => (p.grantedTokens[token] ? p : { ...p, grantedTokens: { ...p.grantedTokens, [token]: 1 } }));
+  }, []);
+
+  /** Смена языка интерфейса (п. 6.9). Сохраняется автосейвом и на выходе. */
+  const setLang = useCallback((l: Lang) => {
+    setS((p) => (p.lang === l ? p : { ...p, lang: l }));
+  }, []);
+
   const canPrestige = s.modelIndex === MODELS.length - 1;
 
   const prestigeReset = useCallback(() => {
     setS((p) => ({
       ...initialState(),
       sound: p.sound,
+      lang: p.lang,
+      grantedTokens: p.grantedTokens,
       introSeen: true,
       prestige: p.prestige + 1,
     }));
@@ -441,7 +527,8 @@ export function useGame() {
     try {
       localStorage.removeItem(SAVE_KEY);
     } catch { /* noop */ }
-    setS(initialState());
+    // язык — настройка, а не прогресс: переживает полный сброс
+    setS((p) => ({ ...initialState(), lang: p.lang }));
   }, []);
 
   const totalCardPct = useMemo(
@@ -466,9 +553,18 @@ export function useGame() {
     prestigeMult,
     canPrestige,
     offlineGain,
+    paused,
+    setPaused,
+    setLang,
     isFresh: loaded.isFresh,
     click,
     saveNow,
+    perkMult,
+    cashPileAmount,
+    grantCash,
+    grantPerk,
+    isTokenGranted,
+    markTokenGranted,
     buyNext,
     buyUpgrade,
     buyBot,

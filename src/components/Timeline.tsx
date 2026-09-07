@@ -1,12 +1,17 @@
 import { motion } from "framer-motion";
-import { ERAS, MODELS } from "../data/game";
+import { MODELS } from "../data/game";
+import { fill, useI18n } from "../i18n";
+import { localizedEras, modelText, shortEra } from "../i18n/data";
 
 interface TimelineProps {
   modelIndex: number;
 }
 
 export default function Timeline({ modelIndex }: TimelineProps) {
-  const currentEra = MODELS[modelIndex].era;
+  const { t, lang } = useI18n();
+  const ERAS = localizedEras(lang);
+  const eraOf = (idx: number) => modelText(lang, MODELS[idx]).era;
+  const currentEra = eraOf(modelIndex);
   const currentEraIdx = ERAS.indexOf(currentEra);
 
   return (
@@ -14,13 +19,13 @@ export default function Timeline({ modelIndex }: TimelineProps) {
       <div className="mx-auto max-w-[1600px] px-4 py-2.5 sm:px-6">
         <div className="mb-2 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.18em] text-white/40">
           <span>
-            Коллекция{" "}
+            {t.timeline.collection}{" "}
             <span className="text-white/80">
               {modelIndex + 1}<span className="text-white/40">/{MODELS.length}</span>
             </span>
           </span>
           <span>
-            Эпоха: <span className="text-bmw-soft">{currentEra}</span>
+            {t.timeline.era}: <span className="text-bmw-soft">{currentEra}</span>
           </span>
         </div>
 
@@ -28,8 +33,10 @@ export default function Timeline({ modelIndex }: TimelineProps) {
         <div className="relative">
           <div className="flex gap-1">
             {ERAS.map((era, eraIdx) => {
-              const count = MODELS.filter((m) => m.era === era).length;
-              const owned = MODELS.filter((m) => m.era === era && MODELS.indexOf(m) <= modelIndex).length;
+              const count = MODELS.filter((m) => modelText(lang, m).era === era).length;
+              const owned = MODELS.filter(
+                (m) => modelText(lang, m).era === era && MODELS.indexOf(m) <= modelIndex
+              ).length;
               const empty = count === 0;
               const active = era === currentEra;
               // эпоха пройдена: все модели куплены ИЛИ (пустая эпоха и мы уже дальше по времени)
@@ -41,8 +48,8 @@ export default function Timeline({ modelIndex }: TimelineProps) {
                   className="group relative flex-1"
                   title={
                     empty
-                      ? `${era}: война — гражданское производство остановлено${passedEmpty ? " (пройдено)" : ""}`
-                      : `${era}: ${owned}/${count}`
+                      ? `${fill(t.timeline.emptyTitle, { era })}${passedEmpty ? t.timeline.emptyPassed : ""}`
+                      : fill(t.timeline.eraProgress, { era, o: owned, c: count })
                   }
                 >
                   <div
@@ -80,7 +87,7 @@ export default function Timeline({ modelIndex }: TimelineProps) {
                             : "text-white/30"
                     }`}
                   >
-                    {era.replace("-е", "")}
+                    {shortEra(lang, era)}
                   </div>
                 </div>
               );

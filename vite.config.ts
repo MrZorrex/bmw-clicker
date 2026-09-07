@@ -10,14 +10,19 @@ const __dirname = path.dirname(__filename);
 
 // https://vite.dev/config/
 export default defineConfig({
+  // Относительные пути — собранная игра открывается двойным кликом (file://)
+  // и с любого хостинга без перенастройки.
+  base: "./",
   plugins: [react(), tailwindcss(), viteSingleFile()],
-  server: {
-    host: "0.0.0.0",
-    allowedHosts: true,
-  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),
     },
+  },
+  server: {
+    host: "0.0.0.0",
+    port: 5173,
+    // Разрешаем превью-хосты песочницы (прокси вида *.e2b.app)
+    allowedHosts: true,
   },
 });

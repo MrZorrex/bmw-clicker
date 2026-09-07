@@ -2,6 +2,8 @@
 //  Данные игры «Перекуп BMW»
 // ─────────────────────────────────────────────────────────────
 
+import { A } from "../utils/assets";
+
 export interface CarModel {
   id: string;
   name: string;
@@ -26,7 +28,7 @@ export const MODELS: CarModel[] = [
     era: "1920-е",
     base: 1,
     price: 0,
-    img: "/models/dixi.jpg",
+    img: A("/models/dixi.jpg"),
     tint: "#8fa3b8",
     desc: "Первая автомобильная модель BMW — лицензионный Austin Seven. С этого «карлика» началась великая история.",
   },
@@ -38,7 +40,7 @@ export const MODELS: CarModel[] = [
     era: "1930-е",
     base: 6,
     price: 200,
-    img: "/models/bmw303.jpg",
+    img: A("/models/bmw303.jpg"),
     tint: "#5a6fa8",
     desc: "Первый самостоятельный автомобиль BMW: первый рядный «шестицилиндровик» и те самые ноздри решётки.",
   },
@@ -50,7 +52,7 @@ export const MODELS: CarModel[] = [
     era: "1930-е",
     base: 25,
     price: 1800,
-    img: "/models/bmw328.jpg",
+    img: A("/models/bmw328.jpg"),
     tint: "#c9d4e0",
     desc: "Легендарный родстер, громивший Mille Miglia. Икона довоенного автоспорта и первая гоночная легенда марки.",
   },
@@ -62,7 +64,7 @@ export const MODELS: CarModel[] = [
     era: "1930-е",
     base: 110,
     price: 14000,
-    img: "/models/bmw335.jpg",
+    img: A("/models/bmw335.jpg"),
     tint: "#3f7d5d",
     desc: "Полноразмерный флагман с 3,5-литровой «шестёркой» — самый мощный довоенный BMW.",
   },
@@ -74,7 +76,7 @@ export const MODELS: CarModel[] = [
     era: "1950-е",
     base: 480,
     price: 75000,
-    img: "/models/isetta.jpg",
+    img: A("/models/isetta.jpg"),
     tint: "#f2b24a",
     desc: "Микрокар-«пузырёк» с единственной дверью спереди. Именно он спас BMW от банкротства в 50-х.",
   },
@@ -86,7 +88,7 @@ export const MODELS: CarModel[] = [
     era: "1950-е",
     base: 2000,
     price: 480_000,
-    img: "/models/bmw502.jpg",
+    img: A("/models/bmw502.jpg"),
     tint: "#7fa8d9",
     desc: "«Барочный ангел» — первый послевоенный немецкий автомобиль с V8. Роскошь эпохи восстановления.",
   },
@@ -98,7 +100,7 @@ export const MODELS: CarModel[] = [
     era: "1950-е",
     base: 9000,
     price: 4_200_000,
-    img: "/models/bmw507.jpg",
+    img: A("/models/bmw507.jpg"),
     tint: "#e8e9ec",
     desc: "Родстер, за которым охотился сам Элвис. Сегодня — один из самых дорогих коллекционных BMW в мире.",
   },
@@ -110,7 +112,7 @@ export const MODELS: CarModel[] = [
     era: "1950-е",
     base: 40000,
     price: 33_000_000,
-    img: "/models/bmw700.jpg",
+    img: A("/models/bmw700.jpg"),
     tint: "#f0e0b8",
     desc: "Компакт, который продавался сотнями тысяч и второй раз вытащил компанию с края пропасти.",
   },
@@ -122,7 +124,7 @@ export const MODELS: CarModel[] = [
     era: "1960-е",
     base: 180000,
     price: 230_000_000,
-    img: "/models/bmw1500.jpg",
+    img: A("/models/bmw1500.jpg"),
     tint: "#8fb4d9",
     desc: "«Новый класс» заложил современную ДНК BMW: спортивный люксовый седан, спасший фирму в третий раз.",
   },
@@ -134,7 +136,7 @@ export const MODELS: CarModel[] = [
     era: "1960-е",
     base: 800000,
     price: 1_800_000_000,
-    img: "/models/bmw2002.jpg",
+    img: A("/models/bmw2002.jpg"),
     tint: "#ff8c3b",
     desc: "Культовый компакт из серии 02. Его версия Turbo стала первым серийным турбо-автомобилем Европы.",
   },
@@ -146,7 +148,7 @@ export const MODELS: CarModel[] = [
     era: "1970-е",
     base: 3_500_000,
     price: 13_000_000_000,
-    img: "/models/csl30.jpg",
+    img: A("/models/csl30.jpg"),
     tint: "#e8e8ea",
     desc: "«Бэтмобиль» с огромным антикрылом. Легенда кузовных гонок и родоначальник духа BMW M.",
   },
@@ -158,7 +160,7 @@ export const MODELS: CarModel[] = [
     era: "1970-е",
     base: 16_000_000,
     price: 110_000_000_000,
-    img: "/models/bmwe21.jpg",
+    img: A("/models/bmwe21.jpg"),
     tint: "#ff7a29",
     desc: "Первая «трёшка» в истории. Начало самой успешной династии спортивных седанов планеты.",
   },
@@ -170,7 +172,7 @@ export const MODELS: CarModel[] = [
     era: "1970-е",
     base: 75_000_000,
     price: 950_000_000_000,
-    img: "/models/bmwm1.jpg",
+    img: A("/models/bmwm1.jpg"),
     tint: "#f2f2f4",
     desc: "Среднемоторный суперкар, рождённый вместе с Lamborghini. Единственный серийный суперкар BMW.",
   },
@@ -182,7 +184,7 @@ export const MODELS: CarModel[] = [
     era: "1980-е",
     base: 330_000_000,
     price: 7_500_000_000_000,
-    img: "/models/m3e30.jpg",
+    img: A("/models/m3e30.jpg"),
     tint: "#e33636",
     desc: "Омологационный зверь DTM. Один из самых желанных классических BMW на планете.",
   },
@@ -194,7 +196,7 @@ export const MODELS: CarModel[] = [
     era: "1980-е",
     base: 1_400_000_000,
     price: 62_000_000_000_000,
-    img: "/models/m5e34.jpg",
+    img: A("/models/m5e34.jpg"),
     tint: "#d23c3c",
     desc: "Последняя «пятёрка» ручной сборки из Гархинга. Спортивный седан, ставший эталоном жанра.",
   },
@@ -206,7 +208,7 @@ export const MODELS: CarModel[] = [
     era: "1980-е",
     base: 6_200_000_000,
     price: 520_000_000_000_000,
-    img: "/models/e850i.jpg",
+    img: A("/models/e850i.jpg"),
     tint: "#3d5474",
     desc: "Высокотехнологичное купе с V12 и выезжающими фарами. Космический корабль конца 80-х.",
   },
@@ -218,7 +220,7 @@ export const MODELS: CarModel[] = [
     era: "1990-е",
     base: 27_000_000_000,
     price: 4_400_000_000_000_000,
-    img: "/models/bmwx5.jpg",
+    img: A("/models/bmwx5.jpg"),
     tint: "#dfe7ef",
     desc: "Первый кроссовер марки. BMW придумала формулу SAV — и захватила новый рынок.",
   },
@@ -230,7 +232,7 @@ export const MODELS: CarModel[] = [
     era: "2000-е",
     base: 120_000_000_000,
     price: 37_000_000_000_000_000,
-    img: "/models/m3e46.jpg",
+    img: A("/models/m3e46.jpg"),
     tint: "#ffd23f",
     desc: "Современная классика: атмосферная рядная «шестёрка» S54 и идеальный баланс.",
   },
@@ -242,7 +244,7 @@ export const MODELS: CarModel[] = [
     era: "2000-е",
     base: 520_000_000_000,
     price: 310_000_000_000_000_000,
-    img: "/models/bmwz4.jpg",
+    img: A("/models/bmwz4.jpg"),
     tint: "#eef2f7",
     desc: "Родстер «пылающего дизайна» Криса Бэнгла. На дебюте получил награду «Дизайн года».",
   },
@@ -254,7 +256,7 @@ export const MODELS: CarModel[] = [
     era: "2010-е",
     base: 2_300_000_000_000,
     price: 2_700_000_000_000_000_000,
-    img: "/models/bmwi8.jpg",
+    img: A("/models/bmwi8.jpg"),
     tint: "#57c7ff",
     desc: "Плагин-гибридный спорткар из будущего, с дверями-крыльями и карбоновой клетью.",
   },
@@ -266,7 +268,7 @@ export const MODELS: CarModel[] = [
     era: "2020-е",
     base: 10_000_000_000_000,
     price: 24_000_000_000_000_000_000,
-    img: "/models/bmwm4.jpg",
+    img: A("/models/bmwm4.jpg"),
     tint: "#c8f04a",
     desc: "Спорная решётка, бесспорный характер: 510 сил, задний привод и дрифт-режим.",
   },
@@ -278,7 +280,7 @@ export const MODELS: CarModel[] = [
     era: "2020-е",
     base: 45_000_000_000_000,
     price: 210_000_000_000_000_000_000,
-    img: "/models/bmwxm.jpg",
+    img: A("/models/bmwxm.jpg"),
     tint: "#8a93a3",
     desc: "Первый самостоятельный проект подразделения M со времён M1: 653 силы гибридной ярости.",
   },
@@ -290,7 +292,7 @@ export const MODELS: CarModel[] = [
     era: "2020-е",
     base: 200_000_000_000_000,
     price: 1_800_000_000_000_000_000_000,
-    img: "/models/neueklasse.jpg",
+    img: A("/models/neueklasse.jpg"),
     tint: "#9adfff",
     desc: "Электрическое будущее марки: платформа Neue Klasse, 800 вольт и новая эра дизайна.",
   },
@@ -456,30 +458,33 @@ export interface CardDef {
 }
 
 export const CARDS: CardDef[] = [
-  { id: "kofe", name: "Кофе из салона", rarity: "common", pct: 0.015, img: "/cards/kofe.jpg", note: "Клиент расслаблен — торг легче" },
-  { id: "elochka", name: "Пахучая ёлочка", rarity: "common", pct: 0.015, img: "/cards/elochka.jpg", note: "Новая машина пахнет именно так" },
-  { id: "nomera", name: "Красивые номера", rarity: "common", pct: 0.015, img: "/cards/nomera.jpg", note: "А777АА продают сами себя" },
-  { id: "turbo2002", name: "BMW 2002 Turbo", rarity: "rare", pct: 0.06, img: "/models/bmw2002.jpg", note: "Первый турбо серийник Европы" },
-  { id: "z1", name: "BMW Z1", rarity: "rare", pct: 0.06, img: "/cards/z1.jpg", note: "Двери уезжают вниз. Магия" },
-  { id: "csi850", name: "BMW 850CSi", rarity: "rare", pct: 0.06, img: "/models/e850i.jpg", note: "V12, механика, легенда 90-х" },
-  { id: "mechhand", name: "Механическая рука", rarity: "rare", pct: 0, botPct: 0.35, img: "/cards/mechhand.jpg", note: "Автокликер работает бодрее" },
-  { id: "luckycoin", name: "Счастливая монета", rarity: "rare", pct: 0, critPct: 0.01, img: "/cards/luckycoin.jpg", note: "+1% к шансу крита" },
-  { id: "m3e30c", name: "BMW M3 (E30)", rarity: "epic", pct: 0.11, img: "/models/m3e30.jpg", note: "Король DTM" },
-  { id: "m5e34c", name: "BMW M5 (E34)", rarity: "epic", pct: 0.11, img: "/models/m5e34.jpg", note: "Ручная сборка, Гархинг" },
-  { id: "z4m", name: "BMW Z4 M Coupé", rarity: "epic", pct: 0.11, img: "/models/bmwz4.jpg", note: "Двигатель S54 и улыбка" },
-  { id: "bot3000", name: "Автокликер X-3000", rarity: "epic", pct: 0, botPct: 0.6, img: "/cards/bot3000.jpg", note: "Запрещён в трёх странах" },
-  { id: "goldtongue", name: "Золотой язык", rarity: "epic", pct: 0, critPct: 0.02, img: "/cards/goldtongue.jpg", note: "+2% к шансу крита" },
-  { id: "m1c", name: "BMW M1", rarity: "legend", pct: 0.2, img: "/models/bmwm1.jpg", note: "Суперкар, рождённый M GmbH" },
-  { id: "c507", name: "BMW 507", rarity: "legend", pct: 0.2, img: "/models/bmw507.jpg", note: "Родстер Элвиса Пресли" },
-  { id: "cslc", name: "BMW 3.0 CSL «Бэтмобиль»", rarity: "legend", pct: 0.2, img: "/models/csl30.jpg", note: "Антикрыло, победы, культ" },
+  { id: "kofe", name: "Кофе из салона", rarity: "common", pct: 0.015, img: A("/cards/kofe.jpg"), note: "Клиент расслаблен — торг легче" },
+  { id: "elochka", name: "Пахучая ёлочка", rarity: "common", pct: 0.015, img: A("/cards/elochka.jpg"), note: "Новая машина пахнет именно так" },
+  { id: "nomera", name: "Красивые номера", rarity: "common", pct: 0.015, img: A("/cards/nomera.jpg"), note: "А777АА продают сами себя" },
+  { id: "turbo2002", name: "BMW 2002 Turbo", rarity: "rare", pct: 0.06, img: A("/models/bmw2002.jpg"), note: "Первый турбо серийник Европы" },
+  { id: "z1", name: "BMW Z1", rarity: "rare", pct: 0.06, img: A("/cards/z1.jpg"), note: "Двери уезжают вниз. Магия" },
+  { id: "csi850", name: "BMW 850CSi", rarity: "rare", pct: 0.06, img: A("/models/e850i.jpg"), note: "V12, механика, легенда 90-х" },
+  { id: "mechhand", name: "Механическая рука", rarity: "rare", pct: 0, botPct: 0.35, img: A("/cards/mechhand.jpg"), note: "Автокликер работает бодрее" },
+  { id: "luckycoin", name: "Счастливая монета", rarity: "rare", pct: 0, critPct: 0.01, img: A("/cards/luckycoin.jpg"), note: "+1% к шансу крита" },
+  { id: "m3e30c", name: "BMW M3 (E30)", rarity: "epic", pct: 0.11, img: A("/models/m3e30.jpg"), note: "Король DTM" },
+  { id: "m5e34c", name: "BMW M5 (E34)", rarity: "epic", pct: 0.11, img: A("/models/m5e34.jpg"), note: "Ручная сборка, Гархинг" },
+  { id: "z4m", name: "BMW Z4 M Coupé", rarity: "epic", pct: 0.11, img: A("/models/bmwz4.jpg"), note: "Двигатель S54 и улыбка" },
+  { id: "bot3000", name: "Автокликер X-3000", rarity: "epic", pct: 0, botPct: 0.6, img: A("/cards/bot3000.jpg"), note: "Запрещён в трёх странах" },
+  { id: "goldtongue", name: "Золотой язык", rarity: "epic", pct: 0, critPct: 0.02, img: A("/cards/goldtongue.jpg"), note: "+2% к шансу крита" },
+  { id: "m1c", name: "BMW M1", rarity: "legend", pct: 0.2, img: A("/models/bmwm1.jpg"), note: "Суперкар, рождённый M GmbH" },
+  { id: "c507", name: "BMW 507", rarity: "legend", pct: 0.2, img: A("/models/bmw507.jpg"), note: "Родстер Элвиса Пресли" },
+  { id: "cslc", name: "BMW 3.0 CSL «Бэтмобиль»", rarity: "legend", pct: 0.2, img: A("/models/csl30.jpg"), note: "Антикрыло, победы, культ" },
 ];
 
 export interface CaseDef {
   id: string;
   name: string;
   tagline: string;
-  mult: number; // цена = mult × база текущей модели
-  minPrice: number;
+  /**
+   * Цена НЕ зависит от выкупленной машины: startPrice × priceGrowth^открытия —
+   * та же модель прогрессии, что и у прокачки (cost × growth^уровень).
+   */
+  startPrice: number;
   /** Во сколько раз дорожает контейнер после каждого открытия */
   priceGrowth: number;
   cashMin: number; // кэш-дроп: mult × база
@@ -494,9 +499,9 @@ export const CASES: CaseDef[] = [
     id: "tolyatti",
     name: "Контейнер из Тольятти",
     tagline: "Суровый рандом авторынка",
-    mult: 150,
-    minPrice: 1200,
-    priceGrowth: 1.16,
+    // Доступен почти сразу (старт ~3 цены Dixi→303), растёт средне: +50% за открытие.
+    startPrice: 600,
+    priceGrowth: 1.5,
     cashMin: 100,
     cashMax: 340,
     boostMult: 2,
@@ -507,9 +512,12 @@ export const CASES: CaseDef[] = [
     id: "munich",
     name: "Контейнер из Мюнхена",
     tagline: "Прямиком с автосалона на Петровке",
-    mult: 2200,
-    minPrice: 75_000,
-    priceGrowth: 1.22,
+    // Премиум: старт в 3.75× дороже Тольятти, зато рост чуть мягче (+48% за
+    // открытие) — в прогрессии держится в коридоре 3–4 цены Тольятти. Первый
+    // контейнер открывается в эре 328, дальше машины дорожают быстрее цены —
+    // хотя бы одно открытие за 1–2 машины гарантировано.
+    startPrice: 2250,
+    priceGrowth: 1.48,
     cashMin: 800,
     cashMax: 2600,
     boostMult: 3,

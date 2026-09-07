@@ -21,10 +21,23 @@ export interface YaPurchase {
   developerPayload?: string;
 }
 
+/** Товар из каталога Консоли разработчика (payments.getCatalog). */
+export interface YaProduct {
+  id: string;
+  title: string;
+  description: string;
+  imageURI: string;
+  price: string; // "<цена> <код валюты>"
+  priceValue: string;
+  priceCurrencyCode: string;
+  getPriceCurrencyImage(size: "small" | "medium" | "svg"): string;
+}
+
 export interface YaPayments {
   purchase(opts: { id: string; developerPayload?: string }): Promise<YaPurchase>;
-  getPurchases(): Promise<YaPurchase[]>;
+  getPurchases(): Promise<YaPurchase[] | { signature: string }>;
   consumePurchase(token: string): Promise<void>;
+  getCatalog(): Promise<YaProduct[]>;
 }
 
 export interface YaSdk {
@@ -35,10 +48,15 @@ export interface YaSdk {
   getPlayer(opts?: { scopes?: boolean }): Promise<YaPlayer>;
   getStorage(): Promise<Storage>;
   getPayments?(opts?: { signed?: boolean }): Promise<YaPayments>;
+  /** Объект покупок доступен и напрямую — лениво инициализируется при первом вызове. */
+  payments?: YaPayments;
   on(event: string, cb: () => void): void;
   off?(event: string, cb: () => void): void;
+  /** Имена платформенных событий (HISTORY_BACK, EXIT, ACCOUNT_SELECTION_DIALOG_*). */
+  EVENTS?: Record<string, string>;
+  dispatchEvent?(eventName: string, detail?: object): Promise<unknown>;
   auth?: { openAuthDialog(): Promise<void> };
-  environment?: { i18n?: { lang?: string } };
+  environment?: { i18n?: { lang?: string; tld?: string } };
   isAvailableMethod?(name: string): Promise<boolean>;
   adv?: {
     showFullscreenAdv(opts: { callbacks?: FullscreenCallbacks }): void;
@@ -71,23 +89,91 @@ let player: YaPlayer | null = null;
 let readyCalled = false;
 let gameplayRunning = false;
 
+/**
+ * Код языка интерфейса платформы (ISO 639-1: 'ru', 'en', ...).
+ * Читается строго при запуске — так работает автоопределение языка (п. 2.14):
+ * индикатор I18N на debug-панели зеленеет именно в момент чтения
+ * ysdk.environment.i18n.lang на старте.
+ */
+let sdkLang: string | null = null;
+export const getSdkLang = () => sdkLang;
+
 export const isYandex = () => ysdk !== null;
 
-/** IAP Яндекс Игр. Покупки доступны только на платформе, вне её это no-op. */
+// ── Инап-покупки ───────────────────────────────────────────────
+// Обработка платежей — на клиенте (сервера у игры нет), поэтому по доке
+// getPayments() вызывается БЕЗ параметра signed: данные приходят в открытом
+// виде. Покупки доступны только на платформе; вне её — безопасный no-op.
+
+let paymentsMod: YaPayments | null = null;
+let paymentsTried = false;
+
+/** Ленивая инициализация модуля покупок. null — покупки недоступны. */
+export async function getPaymentsModule(): Promise<YaPayments | null> {
+  if (paymentsMod) return paymentsMod;
+  if (!ysdk || paymentsTried) return paymentsMod;
+  paymentsTried = true; // не дёргаем инициализацию повторно
+  try {
+    paymentsMod = ysdk.getPayments ? await ysdk.getPayments() : (ysdk.payments ?? null);
+  } catch {
+    paymentsMod = ysdk.payments ?? null;
+  }
+  return paymentsMod;
+}
+
+/** Каталог товаров из Консоли разработчика — источник цены и валюты (п. 1.13.2). */
+export async function getCatalog(): Promise<YaProduct[]> {
+  try {
+    const p = await getPaymentsModule();
+    return p ? await p.getCatalog() : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Покупки игрока (для проверки необработанных покупок, п. 1.13.1). */
+export async function listPurchases(): Promise<YaPurchase[]> {
+  try {
+    const p = await getPaymentsModule();
+    if (!p) return [];
+    const res = await p.getPurchases();
+    return Array.isArray(res) ? res : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function buyProduct(productId: string, developerPayload?: string): Promise<YaPurchase | null> {
   try {
-    const payments = await ysdk?.getPayments?.({ signed: true });
-    return payments ? await payments.purchase({ id: productId, developerPayload }) : null;
+    const p = await getPaymentsModule();
+    return p ? await p.purchase({ id: productId, developerPayload }) : null;
   } catch {
+    // игрок закрыл окно оплаты, не авторизован, нет средств и т. д.
     return null;
   }
 }
 
 export async function consumeProduct(token: string): Promise<boolean> {
   try {
-    const payments = await ysdk?.getPayments?.({ signed: true });
-    if (!payments) return false;
-    await payments.consumePurchase(token);
+    const p = await getPaymentsModule();
+    if (!p) return false;
+    await p.consumePurchase(token);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Авторизация через Яндекс ID — только по явному действию игрока (п. 1.2.1). */
+export async function openAuthDialog(): Promise<boolean> {
+  try {
+    if (!ysdk?.auth) return false;
+    await ysdk.auth.openAuthDialog();
+    try {
+      player = await ysdk!.getPlayer();
+    } catch {
+      /* noop */
+    }
     return true;
   } catch {
     return false;
@@ -101,11 +187,27 @@ export const getPlayerName = () => {
   }
 };
 
+export const isPlayerAuthorized = () => {
+  try {
+    return !!player?.isAuthorized();
+  } catch {
+    return false;
+  }
+};
+
 /** Инициализация SDK. Возвращает true, если платформа доступна. */
 export async function initYandex(): Promise<boolean> {
   try {
     if (!window.YaGames) return false;
     ysdk = await window.YaGames.init();
+
+    // Автоопределение языка при запуске (п. 2.14). Читаем всегда — даже если
+    // игрок раньше сохранил свой выбор: индикатор I18N должен зеленеть на старте.
+    try {
+      sdkLang = ysdk.environment?.i18n?.lang ?? null;
+    } catch {
+      sdkLang = null;
+    }
 
     // Надёжное хранилище вместо localStorage (актуально для iOS, п. «Потеря прогресса на iOS»)
     try {
@@ -173,6 +275,31 @@ export function onPlatformPause(pause: () => void, resume: () => void) {
   }
 }
 
+// ── Смена игрового аккаунта ──────────────────────────────────
+// У игрока может быть два прогресса (гостевой и под логином) — платформа
+// показывает диалог выбора. Пока он открыт, облачную синхронизацию ставим
+// на паузу; после закрытия игра перезапрашивает игрока (см. App).
+
+let accountDialogOpen = false;
+
+/** Подписка на открытие/закрытие диалога выбора аккаунта. */
+export function onAccountDialog(onOpen: () => void, onClose: () => void) {
+  try {
+    const ev = ysdk?.EVENTS;
+    if (!ysdk || !ev?.ACCOUNT_SELECTION_DIALOG_OPENED || !ev?.ACCOUNT_SELECTION_DIALOG_CLOSED) return;
+    ysdk.on(ev.ACCOUNT_SELECTION_DIALOG_OPENED, () => {
+      accountDialogOpen = true;
+      onOpen();
+    });
+    ysdk.on(ev.ACCOUNT_SELECTION_DIALOG_CLOSED, () => {
+      accountDialogOpen = false;
+      onClose();
+    });
+  } catch {
+    /* noop */
+  }
+}
+
 // ── Облачные сохранения ──────────────────────────────────────
 
 const CLOUD_KEY = "save";
@@ -197,7 +324,7 @@ export async function cloudLoad<T>(): Promise<T | null> {
 }
 
 export async function cloudSave(state: unknown, flush = false): Promise<void> {
-  if (!player) return;
+  if (!player || accountDialogOpen) return;
   try {
     await player.setData({ [CLOUD_KEY]: JSON.stringify(state) }, flush);
   } catch {
@@ -219,7 +346,7 @@ export async function showRewardedVideo(opts: {
 }) {
   try {
     if (!ysdk?.adv) throw new Error("adv unavailable");
-    ysdk.adv.showRewardedVideo({
+    const cbs: RewardedCallbacks = {
       onOpen: () => setSoundSuspended(true),
       onRewarded: opts.onRewarded,
       onClose: () => {
@@ -230,7 +357,10 @@ export async function showRewardedVideo(opts: {
         setSoundSuspended(false);
         opts.onError?.(e);
       },
-    });
+    };
+    // Передаём колбэки и плоско, и вложенно в `callbacks`: в разных версиях
+    // документации фигурируют обе формы — так обработчики сработают в любом случае.
+    ysdk.adv.showRewardedVideo({ ...cbs, callbacks: { ...cbs } } as never);
   } catch (e) {
     setSoundSuspended(false);
     opts.onError?.(e);
@@ -239,17 +369,21 @@ export async function showRewardedVideo(opts: {
 
 /**
  * Полноэкранная реклама (Interstitial). Показывается в логических паузах
- * и не прерывает сразу после запуска.
+ * (после значимых событий, не по «голому» таймеру — антифрод РСЯ) и не
+ * прерывает игру сразу после запуска. onClose получает wasShown.
  */
-export async function showInterstitial(opts?: { onClose?: () => void; onError?: (e: unknown) => void }) {
+export async function showInterstitial(opts?: {
+  onClose?: (wasShown?: boolean) => void;
+  onError?: (e: unknown) => void;
+}) {
   try {
     if (!ysdk?.adv) throw new Error("adv unavailable");
     ysdk.adv.showFullscreenAdv({
       callbacks: {
         onOpen: () => setSoundSuspended(true),
-        onClose: () => {
+        onClose: (wasShown?: boolean) => {
           setSoundSuspended(false);
-          opts?.onClose?.();
+          opts?.onClose?.(wasShown);
         },
         onError: (e) => {
           setSoundSuspended(false);
