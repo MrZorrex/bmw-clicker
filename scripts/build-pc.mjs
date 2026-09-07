@@ -36,22 +36,40 @@ let html = await readFile(path.join(tmpDir, "index.html"), "utf8");
 // а грузиться с file:// без интернета он будет с задержкой.
 const before = html.length;
 html = html
-  .replace(/<!--\s*Yandex Games SDK[^>]*-->\s*/i, "")
+  .replace(/<!--\s*Yandex Games SDK[\s\S]*?-->\s*/i, "")
   .replace(/<script[^>]*src="(\/sdk\.js|https:\/\/yandex\.ru\/games\/sdk\/v2)"[^>]*>\s*<\/script>\s*/i, "");
 if (html.length === before) {
   console.warn("! Тег SDK Яндекс Игр не найден — возможно, index.html изменился. Продолжаю как есть.");
 }
 
-// Помечаем файл как ПК-версию.
+// Отключаем динамическую догрузку SDK (ensureSdkScript в src/game/yandex.ts):
+// подменяем абсолютный URL пустышкой data:, чтобы ПК-версия вообще не ходила
+// в сеть и сразу стартовала в офлайн-режиме — без задержки и без кнопок рекламы
+// (на file:// они всё равно нерабочие). Пустой скрипт мгновенно даёт onload,
+// window.YaGames остаётся undefined — игра честно считает себя офлайн.
+const ABS_SDK_URL = "https://sdk.games.s3.yandex.net/sdk.js";
+const OFFLINE_SDK_STUB = "data:text/javascript,void 0";
+const absCount = html.split(ABS_SDK_URL).length - 1;
+if (absCount !== 1) {
+  throw new Error(
+    `Ожидалась ровно 1 ссылка ${ABS_SDK_URL} в бандле (ensureSdkScript), найдено: ${absCount} — ` +
+      "возможно, src/game/yandex.ts изменился. ПК-сборка остановлена, чтобы не уйти в сеть."
+  );
+}
+html = html.replace(ABS_SDK_URL, OFFLINE_SDK_STUB);
+
+// Помечаем файл как ПК-версию — крупно, чтобы его случайно не загрузили
+// в Консоль Яндекс Игр: здесь НЕТ SDK, такой файл получит отказ по п. 1.1.
+// В Консоль грузится только publish/bmw-clicker-yandex.zip (npm run build:yandex).
 html = html.replace(
   "<head>",
-  "<head>\n    <!-- Перекуп BMW — автономная версия для ПК: работает офлайн, прогресс хранится в браузере -->"
+  "<head>\n    <!-- Перекуп BMW — автономная версия для ПК: работает офлайн, прогресс хранится в браузере -->\n    <!-- НЕ ЗАГРУЖАТЬ В ЯНДЕКС ИГРЫ: в этом файле вырезан SDK, будет отказ по п. 1.1 -->"
 );
 
 // Проверки для запуска через file://
 const problems = [];
 if (/src="\//.test(html) || /href="\//.test(html)) problems.push("найдены абсолютные пути src=\"/…\" / href=\"/…\"");
-if (/yandex\.ru\/games\/sdk/.test(html) || /src="\/sdk\.js"/.test(html))
+if (/yandex\.ru\/games\/sdk/.test(html) || /src="\/sdk\.js"/.test(html) || html.includes(ABS_SDK_URL))
   problems.push("осталась ссылка на SDK Яндекс Игр");
 if (/\/src\/main\.tsx/.test(html)) problems.push("осталась ссылка на исходник /src/main.tsx (сборка не инлайнилась)");
 if (problems.length > 0) {

@@ -84,6 +84,62 @@ declare global {
   }
 }
 
+/**
+ * Абсолютный адрес SDK — обязателен при интеграции через свой домен (iframe),
+ * дока: https://yandex.ru/dev/games/doc/ru/sdk/sdk-about.html#connect
+ *
+ * На сервере Яндекса скрипт уже подключён тегом `<script src="/sdk.js">`
+ * в index.html, а этот URL — запасной путь: если глобала `YaGames` нет
+ * (свой домен, сбой загрузки `/sdk.js`), догружаем SDK динамически —
+ * дока называет тег и динамическую загрузку «двумя равноправными способами».
+ */
+const SDK_ABS_URL = "https://sdk.games.s3.yandex.net/sdk.js";
+
+/**
+ * Промис с таймаутом: висящий вызов SDK не должен вешать старт игры.
+ * Без этого при зависшем `YaGames.init()` видна только заглушка «Прогреваем
+ * мотор», `LoadingAPI.ready()` не вызывается — и платформа фиксирует
+ * «SDK некорректно встроено» (п. 1.1).
+ */
+export function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`yandex-sdk-timeout: ${label}`)), ms);
+  });
+  const raced = Promise.race([promise, timeout]) as Promise<T>;
+  // `finally` создаёт новый промис — возвращаем его, чтобы таймер точно снимался.
+  return raced.finally(() => clearTimeout(timer));
+}
+
+/**
+ * Гарантирует наличие `window.YaGames`: если тег `/sdk.js` не сработал,
+ * динамически подгружаем SDK с абсолютного адреса. true — SDK доступен.
+ */
+let sdkScriptTried = false;
+async function ensureSdkScript(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  if (window.YaGames) return true;
+  if (sdkScriptTried) return !!window.YaGames;
+  sdkScriptTried = true;
+  try {
+    await withTimeout(
+      new Promise<void>((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = SDK_ABS_URL;
+        s.async = true;
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error("sdk-script-load-failed"));
+        document.head.appendChild(s);
+      }),
+      6000,
+      "sdk-script"
+    );
+  } catch {
+    return !!window.YaGames;
+  }
+  return !!window.YaGames;
+}
+
 let ysdk: YaSdk | null = null;
 let player: YaPlayer | null = null;
 let readyCalled = false;
@@ -150,7 +206,9 @@ export async function getPaymentsModule(): Promise<YaPayments | null> {
   if (!ysdk || paymentsTried) return paymentsMod;
   paymentsTried = true; // не дёргаем инициализацию повторно
   try {
-    paymentsMod = ysdk.getPayments ? await ysdk.getPayments() : (ysdk.payments ?? null);
+    paymentsMod = ysdk.getPayments
+      ? await withTimeout(ysdk.getPayments(), 6000, "payments")
+      : (ysdk.payments ?? null);
   } catch {
     paymentsMod = ysdk.payments ?? null;
   }
@@ -234,16 +292,29 @@ export const isPlayerAuthorized = () => {
 /**
  * Инициализация SDK. Возвращает true, если платформа доступна.
  * Язык платформы (п. 2.14) читается и раздаётся подписчикам до всего остального.
+ *
+ * Идемпотентна: повторные вызовы возвращают тот же промис — двойного
+ * `YaGames.init()` не бывает (п. 1.1). Каждый шаг ограничен таймаутом,
+ * чтобы висящая сеть не вешала старт игры (см. withTimeout).
  */
-export async function initYandex(): Promise<boolean> {
+let initPromise: Promise<boolean> | null = null;
+export function initYandex(): Promise<boolean> {
+  if (!initPromise) initPromise = doInitYandex();
+  return initPromise;
+}
+
+async function doInitYandex(): Promise<boolean> {
   try {
-    if (!window.YaGames) {
+    // Скрипт /sdk.js должен быть загружен ДО YaGames.init() (п. 1.1):
+    // сначала тег в index.html, при его отсутствии — динамическая догрузка.
+    const hasSdk = await ensureSdkScript();
+    if (!hasSdk || !window.YaGames) {
       // Платформы нет (локальная разработка, ПК-сборка) — язык резолвится по браузеру.
       langResolved = true;
       emitSdkLang();
       return false;
     }
-    ysdk = await window.YaGames.init();
+    ysdk = await withTimeout(window.YaGames.init(), 7000, "init");
 
     // Автоопределение языка при запуске (п. 2.14). Читаем ПЕРВЫМ делом — сразу
     // после init(), до хранилища и getPlayer(): индикатор I18N на debug-панели
@@ -260,7 +331,7 @@ export async function initYandex(): Promise<boolean> {
 
     // Надёжное хранилище вместо localStorage (актуально для iOS, п. «Потеря прогресса на iOS»)
     try {
-      const safeStorage = await ysdk.getStorage();
+      const safeStorage = await withTimeout(ysdk.getStorage(), 4000, "storage");
       if (safeStorage) {
         Object.defineProperty(window, "localStorage", { get: () => safeStorage, configurable: true });
       }
@@ -269,7 +340,7 @@ export async function initYandex(): Promise<boolean> {
     }
 
     try {
-      player = await ysdk.getPlayer();
+      player = await withTimeout(ysdk.getPlayer(), 4000, "player");
     } catch {
       player = null; // гостевой режим — прогресс останется локальным
     }
@@ -365,7 +436,7 @@ export const getCloudSnapshot = () => cloudSnapshot;
 export async function cloudLoad<T>(): Promise<T | null> {
   if (!player) return null;
   try {
-    const data = await player.getData([CLOUD_KEY]);
+    const data = await withTimeout(player.getData([CLOUD_KEY]), 5000, "cloud-load");
     const raw = data?.[CLOUD_KEY];
     if (!raw) return null;
     return (typeof raw === "string" ? JSON.parse(raw) : raw) as T;

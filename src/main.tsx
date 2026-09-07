@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App";
-import { cloudLoad, getSdkLang, initYandex, onSdkLang, setCloudSnapshot } from "./game/yandex";
+import { cloudLoad, getSdkLang, initYandex, onSdkLang, setCloudSnapshot, withTimeout } from "./game/yandex";
 import { SAVE_KEY } from "./game/useGame";
 import { applyLangToDocument, readLocalLangSave, resolveStartLang } from "./i18n";
 
@@ -14,6 +14,11 @@ import { applyLangToDocument, readLocalLangSave, resolveStartLang } from "./i18n
  * 2. Подтягиваем облачное сохранение: язык, выбранный игроком вручную, может
  *    приехать из облака (п. 6.9).
  * 3. Рендерим игру; LoadingAPI.ready() вызывается внутри App (п. 1.19.2).
+ *
+ * Все ожидания ограничены таймаутами: старт игры никогда не висит дольше
+ * ~10 секунд даже при мёртвой сети. Иначе видна только заглушка «Прогреваем
+ * мотор», платформа не получает LoadingAPI.ready() — и фиксирует отказ
+ * «SDK некорректно встроено» (п. 1.1).
  */
 async function boot() {
   // Язык применяем по событию, а не после await initYandex(): внутри
@@ -22,9 +27,9 @@ async function boot() {
   const offLang = onSdkLang(() => applyBootLang());
 
   try {
-    const ok = await initYandex();
+    const ok = await withTimeout(initYandex(), 9000, "boot-init").catch(() => false);
     if (ok) {
-      const cloud = await cloudLoad();
+      const cloud = await withTimeout(cloudLoad(), 4000, "boot-cloud").catch(() => null);
       if (cloud) setCloudSnapshot(cloud);
     }
   } catch {
