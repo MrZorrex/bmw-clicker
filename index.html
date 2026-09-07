@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" translate="no">
   <head>
     <meta charset="UTF-8" />
     <meta
@@ -10,6 +10,8 @@
     <meta name="theme-color" content="#07090d" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- Браузерный автоперевод внутри iframe портит вёрстку и ломает локализацию игры. -->
+    <meta name="google" content="notranslate" />
     <title>Перекуп BMW</title>
 
     <!-- Yandex Games SDK: актуальный относительный путь (п. 1.19.1, иначе debug-панель покажет старый лоадер IF) -->
@@ -53,6 +55,7 @@
         text-transform: uppercase;
         color: rgba(255, 255, 255, 0.45);
         text-align: center;
+        padding: 0 16px;
       }
       @keyframes spin {
         to {
@@ -64,6 +67,67 @@
   <body>
     <div id="root"></div>
     <div id="boot"><div><div class="ring"></div><div class="t">Прогреваем мотор</div></div></div>
+
+    <script>
+      /**
+       * П. 2.14 — язык загрузочного экрана до инициализации SDK.
+       * Классический инлайн-скрипт выполняется раньше модуля игры (module —
+       * deferred), поэтому первые кадры уже показываются на нужном языке:
+       * 1) язык, выбранный игроком вручную (п. 6.9) — из локального сейва;
+       * 2) иначе язык браузера (резервный набор: ru для ru/be/kk/uk/uz, en — для всех);
+       * 3) как только SDK вернёт environment.i18n.lang, язык пересчитывается
+       *    в src/main.tsx → applyBootLang() (это и есть автоопределение).
+       * Строки здесь — короткая копия meta.* из src/i18n/*: синхронизировать
+       * нужно только её, остальной текст игры переводит React.
+       */
+      (function () {
+        var TEXTS = {
+          ru: {
+            title: "Перекуп BMW",
+            boot: "Прогреваем мотор",
+            desc: "Перекуп BMW — кликер-симулятор перекупщика: пройди всю историю BMW от Dixi 1928 года до Neue Klasse.",
+          },
+          en: {
+            title: "BMW Reseller",
+            boot: "Warming up the engine",
+            desc: "BMW Reseller — a flipper clicker sim: play through the whole BMW history, from the 1928 Dixi to the Neue Klasse.",
+          },
+        };
+        var RU_GROUP = ["ru", "be", "kk", "uk", "uz"];
+        var SAVE_KEY = "bmw-perekup-save-v1";
+        var d = document;
+        var lang = null;
+
+        try {
+          var saved = window.localStorage.getItem(SAVE_KEY);
+          saved = saved ? JSON.parse(saved) : null;
+          // Только ручной выбор: автосохранённое значение языка не должно
+          // переживать смену языка платформы — его пересчитывает SDK.
+          if (saved && TEXTS[saved.lang] && typeof saved.langPinnedOn === "string") lang = saved.lang;
+        } catch (e) {
+          /* localStorage недоступен (изолированный sandbox) — не страшно */
+        }
+
+        if (!lang) {
+          var nav = "";
+          try {
+            nav = String((navigator && (navigator.language || (navigator.languages || [])[0])) || "");
+          } catch (e) {
+            nav = "";
+          }
+          var code = nav.toLowerCase().split(/[-_]/)[0];
+          lang = !code ? "ru" : RU_GROUP.indexOf(code) >= 0 ? "ru" : "en";
+        }
+
+        var t = TEXTS[lang];
+        d.documentElement.lang = lang;
+        d.title = t.title;
+        var meta = d.querySelector('meta[name="description"]');
+        if (meta) meta.setAttribute("content", t.desc);
+        var boot = d.querySelector("#boot .t");
+        if (boot) boot.textContent = t.boot;
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

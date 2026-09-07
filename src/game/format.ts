@@ -10,6 +10,18 @@ export function setNumberLang(lang: Lang): void {
   numLang = lang;
 }
 
+/**
+ * Срез хвостовых нулей и разделителя: `1.50` → `1.5`, `1.00` → `1`.
+ * Разделитель вставляет уже после среза — то, что число дробное, определяет
+ * точка от toFixed(), а не локальный разделитель (в RU он запятая).
+ */
+function trimZeros(value: string, decSep: string): string {
+  const dot = value.indexOf(".");
+  if (dot < 0) return value; // дробной части нет — обрезать нечего (важно: 200 ≠ 2)
+  const frac = value.slice(dot + 1).replace(/0+$/, "");
+  return frac ? `${value.slice(0, dot)}${decSep}${frac}` : value.slice(0, dot);
+}
+
 export function fmt(n: number): string {
   if (!isFinite(n)) return "∞";
   if (n < 0) return "-" + fmt(-n);
@@ -20,13 +32,7 @@ export function fmt(n: number): string {
   if (n < 1000) {
     // мелкие значения не округляем в ноль — иначе прокачка выглядит бесполезной
     const decimals = n < 1 ? 2 : n < 10 ? 2 : n < 100 ? 1 : 0;
-    return n
-      .toFixed(decimals)
-      .replace(".", decSep)
-      .replace(/,(\\d*?)0+$/, (_m, d: string) => (d ? `,${d}` : ""))
-      .replace(/,$/, "")
-      .replace(/\.(\d*?)0+$/, (_m, d: string) => (d ? `.${d}` : ""))
-      .replace(/\.$/, "");
+    return trimZeros(n.toFixed(decimals), decSep);
   }
   let tier = Math.floor(Math.log10(n) / 3);
   if (tier >= SUF.length) tier = SUF.length - 1;
@@ -34,12 +40,7 @@ export function fmt(n: number): string {
   let decimals = 0;
   if (scaled < 10) decimals = 2;
   else if (scaled < 100) decimals = 1;
-  const str = scaled
-    .toFixed(decimals)
-    .replace(".", decSep)
-    .replace(/,?0+$/, (m) => (m.startsWith(",") ? "" : m))
-    .replace(/\.?0+$/, (m) => (m.startsWith(".") ? "" : m));
-  return (tier === 0 ? scaled.toFixed(0) : str) + SUF[tier];
+  return trimZeros(scaled.toFixed(decimals), decSep) + SUF[tier];
 }
 
 export function fmtMoney(n: number): string {

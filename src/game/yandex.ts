@@ -93,10 +93,46 @@ let gameplayRunning = false;
  * Код языка интерфейса платформы (ISO 639-1: 'ru', 'en', ...).
  * Читается строго при запуске — так работает автоопределение языка (п. 2.14):
  * индикатор I18N на debug-панели зеленеет именно в момент чтения
- * ysdk.environment.i18n.lang на старте.
+ * ysdk.environment.i18n.lang на старте, а не в процессе игры.
  */
 let sdkLang: string | null = null;
+let langResolved = false;
 export const getSdkLang = () => sdkLang;
+
+type LangListener = (lang: string | null) => void;
+const langListeners = new Set<LangListener>();
+
+/** Вызывает подписчиков ровно один раз — сразу после чтения языка. */
+function emitSdkLang() {
+  if (!langResolved) return;
+  for (const cb of [...langListeners]) {
+    try {
+      cb(sdkLang);
+    } catch {
+      /* чужой колбэк не должен ломать инициализацию SDK */
+    }
+  }
+  langListeners.clear();
+}
+
+/**
+ * Подписка на код языка платформы (п. 2.14). Нужен, чтобы применить язык в ту
+ * же секунду, как SDK его вернул, — не дожидаясь хранилища, игрока и облачных
+ * сохранений. Если язык уже известен (или платформы нет вовсе) — колбэк
+ * выполняется сразу, поэтому старт игры никогда не ждёт Яндекс Игры бесконечно.
+ */
+export function onSdkLang(cb: LangListener): () => void {
+  if (langResolved) {
+    try {
+      cb(sdkLang);
+    } catch {
+      /* noop */
+    }
+    return () => {};
+  }
+  langListeners.add(cb);
+  return () => langListeners.delete(cb);
+}
 
 export const isYandex = () => ysdk !== null;
 
@@ -195,19 +231,32 @@ export const isPlayerAuthorized = () => {
   }
 };
 
-/** Инициализация SDK. Возвращает true, если платформа доступна. */
+/**
+ * Инициализация SDK. Возвращает true, если платформа доступна.
+ * Язык платформы (п. 2.14) читается и раздаётся подписчикам до всего остального.
+ */
 export async function initYandex(): Promise<boolean> {
   try {
-    if (!window.YaGames) return false;
+    if (!window.YaGames) {
+      // Платформы нет (локальная разработка, ПК-сборка) — язык резолвится по браузеру.
+      langResolved = true;
+      emitSdkLang();
+      return false;
+    }
     ysdk = await window.YaGames.init();
 
-    // Автоопределение языка при запуске (п. 2.14). Читаем всегда — даже если
-    // игрок раньше сохранил свой выбор: индикатор I18N должен зеленеть на старте.
+    // Автоопределение языка при запуске (п. 2.14). Читаем ПЕРВЫМ делом — сразу
+    // после init(), до хранилища и getPlayer(): индикатор I18N на debug-панели
+    // должен стать зелёным на старте. Читаем всегда — даже если игрок раньше
+    // сохранял свой выбор: решение «уважать сейв или автоопределение» принимает
+    // resolveStartLang(), а факт обращения к SDK должен состояться при запуске.
     try {
       sdkLang = ysdk.environment?.i18n?.lang ?? null;
     } catch {
       sdkLang = null;
     }
+    langResolved = true;
+    emitSdkLang();
 
     // Надёжное хранилище вместо localStorage (актуально для iOS, п. «Потеря прогресса на iOS»)
     try {
@@ -227,6 +276,8 @@ export async function initYandex(): Promise<boolean> {
     return true;
   } catch {
     ysdk = null;
+    langResolved = true; // язык не пришёл — пусть работает резервный (браузер/сейв)
+    emitSdkLang();
     return false;
   }
 }
