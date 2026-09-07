@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { animate, motion } from "framer-motion";
-import { Bot, Flame, MousePointerClick, RotateCcw, Star, TrendingUp, Volume2, VolumeX, Zap } from "lucide-react";
+import { Bot, Crown, Flame, MousePointerClick, RotateCcw, Star, TrendingUp, Volume2, VolumeX, Zap } from "lucide-react";
 import { fmtMoney, fmt, fmtTime, fmtRate } from "../game/format";
 import Tooltip from "./Tooltip";
 
@@ -42,6 +42,8 @@ interface HeaderProps {
   sound: boolean;
   onToggleSound: () => void;
   onReset: () => void;
+  /** Показывается только на платформе с непустым каталогом инап-покупок (п. 1.13.6). */
+  onOpenPremium?: () => void;
 }
 
 export default function Header(p: HeaderProps) {
@@ -59,6 +61,15 @@ export default function Header(p: HeaderProps) {
           </div>
           {/* Кнопки стоят сразу после BMW-иконки: баланс ниже на мобильных и не наезжает на них. */}
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            {p.onOpenPremium && (
+              <button
+                onClick={p.onOpenPremium}
+                className="grid size-8 place-items-center rounded-lg border border-gold/30 bg-gold/10 text-gold transition hover:bg-gold/20 sm:size-9"
+                title="Премиум-магазин"
+              >
+                <Crown className="size-4" />
+              </button>
+            )}
             <button
               onClick={p.onToggleSound}
               className="grid size-8 place-items-center rounded-lg border border-white/10 bg-white/5 text-white/60 transition hover:bg-white/10 hover:text-white sm:size-9"

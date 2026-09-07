@@ -1,19 +1,30 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import confetti from "canvas-confetti";
-import { ChevronDown, ChevronUp, Gem } from "lucide-react";
-import { CARDS, RARITY_META, type CaseDef, type CardDef } from "../data/game";
+import { ChevronDown, ChevronUp, FastForward, Gem } from "lucide-react";
+import { RARITY_META, cardsByRarity, type CardDef, type CaseDef, type Rarity } from "../data/game";
 import type { Reward } from "../game/useGame";
 import { fmtMoney } from "../game/format";
 import { CardFace } from "./Shop";
-import { sfxSpin, sfxWin } from "../game/sound";
+import {
+  sfxRewardBoost,
+  sfxRewardCard,
+  sfxRewardCash,
+  sfxSpinStart,
+  sfxTick,
+  sfxTickRare,
+} from "../game/sound";
+import { A } from "../utils/assets";
 
-const CELL_W = 118;
-const CELL_H = 176;
+// ── Геометрия ленты ────────────────────────────────────────────
+const CELL_W = 128;
+const CELL_H = 192;
 const CELL_GAP = 12;
 const STRIDE = CELL_W + CELL_GAP;
-const WIN_INDEX = 40;
-const TOTAL = 48;
+const TOTAL = 66; // ячеек в ленте
+const WIN_INDEX = 56; // где лежит выигрыш — почти в конце, чтобы полоса «пробежала»
+const SPIN_MS = 6400; // полная длительность прокрутки
+const HOLD_MS = 850; // пауза на призовой ячейке перед экраном результата
 
 interface Visual {
   kind: "cash" | "boost" | "card";
@@ -22,25 +33,48 @@ interface Visual {
   mult?: number;
 }
 
-function randomVisual(): Visual {
-  const r = Math.random();
-  if (r < 0.35) return { kind: "cash" };
-  if (r < 0.55) return { kind: "boost", mult: Math.random() < 0.8 ? 2 : 3 };
-  return { kind: "card", card: CARDS[Math.floor(Math.random() * CARDS.length)] };
+/**
+ * Лента собирается по настоящим весам КОНКРЕТНОГО контейнера —
+ * «Тольятти» и «Мюнхен» прокручивают разный состав.
+ */
+function randomVisual(c: CaseDef, base: number): Visual {
+  const w = c.weights;
+  const total = w.cash + w.boost + w.common + w.rare + w.epic + w.legend;
+  let r = Math.random() * total;
+  const pick = (key: keyof typeof w) => {
+    if (r < w[key]) return true;
+    r -= w[key];
+    return false;
+  };
+  if (pick("cash")) {
+    const amount = base > 0 ? base * (c.cashMin + Math.random() * (c.cashMax - c.cashMin)) : undefined;
+    return { kind: "cash", amount };
+  }
+  if (pick("boost")) return { kind: "boost", mult: c.boostMult };
+  let rarity: Rarity = "common";
+  if (pick("common")) rarity = "common";
+  else if (pick("rare")) rarity = "rare";
+  else if (pick("epic")) rarity = "epic";
+  else rarity = "legend";
+  const pool = cardsByRarity(rarity);
+  return { kind: "card", card: pool[Math.floor(Math.random() * pool.length)] };
 }
 
 function Cell({ v }: { v: Visual }) {
   if (v.kind === "cash")
     return (
-      <div className="flex size-full flex-col items-center justify-center gap-1.5 rounded-xl border border-mint/25 bg-mint/[0.07]">
-        <img src="/rewards/cash.jpg" alt="Кэш" className="h-[112px] w-full rounded-lg object-cover" />
+      <div className="flex size-full flex-col items-center justify-center gap-1.5 rounded-xl border border-mint/25 bg-mint/[0.07] p-1.5">
+        <img src={A("/rewards/cash.jpg")} alt="Кэш" className="h-[118px] w-full rounded-lg object-cover" />
         <span className="text-[9px] font-black uppercase tracking-widest text-mint/80">Кэш</span>
+        {v.amount !== undefined && (
+          <span className="tabular -mt-1 text-[10px] font-extrabold text-mint/60">+{fmtMoney(v.amount)}</span>
+        )}
       </div>
     );
   if (v.kind === "boost")
     return (
-      <div className="flex size-full flex-col items-center justify-center gap-1.5 rounded-xl border border-gold/25 bg-gold/[0.07]">
-        <img src="/rewards/boost.jpg" alt="Буст" className="h-[112px] w-full rounded-lg object-cover" />
+      <div className="flex size-full flex-col items-center justify-center gap-1.5 rounded-xl border border-gold/25 bg-gold/[0.07] p-1.5">
+        <img src={A("/rewards/boost.jpg")} alt="Буст" className="h-[118px] w-full rounded-lg object-cover" />
         <span className="tabular text-[9px] font-black uppercase tracking-widest text-gold/80">×{v.mult} буст</span>
       </div>
     );
@@ -51,11 +85,17 @@ function Cell({ v }: { v: Visual }) {
       style={{ borderColor: `${meta.color}40`, background: `${meta.color}0d` }}
     >
       {v.card!.img ? (
-        <img src={v.card!.img} alt="" className="h-16 w-full rounded-md object-cover" />
+        <img src={v.card!.img} alt="" className="h-[104px] w-full rounded-md object-cover" />
       ) : (
         <Gem className="size-8" style={{ color: meta.color }} />
       )}
       <span className="line-clamp-1 px-0.5 text-[8.5px] font-extrabold text-white/75">{v.card!.name}</span>
+      <span
+        className="rounded-full px-1.5 py-px text-[7px] font-black uppercase tracking-widest"
+        style={{ background: `${meta.color}22`, color: meta.color }}
+      >
+        {meta.label}
+      </span>
     </div>
   );
 }
@@ -63,20 +103,27 @@ function Cell({ v }: { v: Visual }) {
 interface GachaModalProps {
   reward: Reward;
   caseDef: CaseDef;
+  /** база текущей модели — чтобы суммы кэша на ленте совпадали с экономикой */
+  modelBase?: number;
   onClose: () => void;
 }
 
-export default function GachaModal({ reward, caseDef, onClose }: GachaModalProps) {
-  const [phase, setPhase] = useState<"spin" | "reveal">("spin");
+export default function GachaModal({ reward, caseDef, modelBase = 0, onClose }: GachaModalProps) {
+  const [phase, setPhase] = useState<"spin" | "land" | "reveal">("spin");
   const boxRef = useRef<HTMLDivElement>(null);
-  const [targetX, setTargetX] = useState(0);
-  const recenter = () => {
-    const w = boxRef.current?.clientWidth ?? 640;
-    setTargetX(-(WIN_INDEX * STRIDE + CELL_W / 2 - w / 2));
-  };
+  const stripRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef(0);
+  const holdRef = useRef(0);
+  const targetRef = useRef(0);
+  const landedRef = useRef(false);
+  const lastCellRef = useRef(-1);
+  const t0Ref = useRef(0);
+
+  // призовая ячейка останавливается не ровно по центру, а с естественным джиттером
+  const jitter = useMemo(() => (Math.random() - 0.5) * CELL_W * 0.56, [reward]);
 
   const strip = useMemo<Visual[]>(() => {
-    const arr: Visual[] = Array.from({ length: TOTAL }, randomVisual);
+    const arr = Array.from({ length: TOTAL }, () => randomVisual(caseDef, modelBase));
     const win: Visual =
       reward.kind === "card"
         ? { kind: "card", card: reward.card }
@@ -85,23 +132,84 @@ export default function GachaModal({ reward, caseDef, onClose }: GachaModalProps
           : { kind: "cash", amount: reward.amount };
     arr[WIN_INDEX] = win;
     return arr;
-  }, [reward]);
+  }, [reward, caseDef, modelBase]);
 
+  const computeTarget = () => {
+    const w = boxRef.current?.clientWidth ?? 640;
+    targetRef.current = -(WIN_INDEX * STRIDE + CELL_W / 2 + jitter - w / 2);
+  };
+
+  /** Сдвигает ленту и играет тик по РЕАЛЬНОМУ положению указателя. */
+  const applyX = (x: number) => {
+    const el = stripRef.current;
+    if (el) el.style.transform = `translate3d(${x}px,0,0)`;
+    const w = boxRef.current?.clientWidth ?? 640;
+    const idx = Math.max(0, Math.min(TOTAL - 1, Math.floor((w / 2 - x) / STRIDE)));
+    if (idx !== lastCellRef.current) {
+      lastCellRef.current = idx;
+      const v = strip[idx];
+      if (!v) return;
+      if (v.kind === "card" && (v.card!.rarity === "epic" || v.card!.rarity === "legend")) sfxTickRare();
+      else sfxTick();
+    }
+  };
+
+  const land = () => {
+    if (landedRef.current) return;
+    landedRef.current = true;
+    setPhase("land");
+    holdRef.current = window.setTimeout(() => setPhase("reveal"), HOLD_MS);
+  };
+
+  const skip = () => {
+    cancelAnimationFrame(rafRef.current);
+    computeTarget();
+    applyX(targetRef.current);
+    land();
+  };
+
+  // ── Прокрутка: rAF + easeOutQuart, тики синхронны с реальной позицией ──
   useEffect(() => {
-    recenter();
-    window.addEventListener("resize", recenter);
-    return () => window.removeEventListener("resize", recenter);
+    computeTarget();
+    sfxSpinStart();
+    t0Ref.current = performance.now();
+    const step = (now: number) => {
+      const t = Math.min(1, (now - t0Ref.current) / SPIN_MS);
+      const e = 1 - Math.pow(1 - t, 4); // быстрый старт → длинное плавное торможение
+      applyX(targetRef.current * e);
+      if (t < 1) rafRef.current = requestAnimationFrame(step);
+      else land();
+    };
+    rafRef.current = requestAnimationFrame(step);
+    const onResize = () => computeTarget();
+    window.addEventListener("resize", onResize);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      window.removeEventListener("resize", onResize);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (phase !== "spin") return;
-    const iv = setInterval(sfxSpin, 130);
-    return () => clearInterval(iv);
-  }, [phase]);
+  // страховочная очистка таймеров
+  useEffect(
+    () => () => {
+      cancelAnimationFrame(rafRef.current);
+      window.clearTimeout(holdRef.current);
+    },
+    []
+  );
 
+  // ── Звук получения предмета — сразу в момент остановки ленты ──
+  useEffect(() => {
+    if (phase !== "land") return;
+    if (reward.kind === "cash") sfxRewardCash();
+    else if (reward.kind === "boost") sfxRewardBoost();
+    else sfxRewardCard(reward.card.rarity);
+  }, [phase, reward]);
+
+  // конфетти на экране результата для эпиков и легенд
   useEffect(() => {
     if (phase !== "reveal") return;
-    sfxWin();
     if (reward.kind === "card" && (reward.card.rarity === "epic" || reward.card.rarity === "legend")) {
       const colors = reward.card.rarity === "legend" ? ["#f5c542", "#fff3c4", "#1c69d4"] : ["#c58bff", "#5cb1eb", "#ffffff"];
       confetti({ particleCount: 130, spread: 75, origin: { y: 0.6 }, colors });
@@ -109,6 +217,9 @@ export default function GachaModal({ reward, caseDef, onClose }: GachaModalProps
       setTimeout(() => confetti({ particleCount: 70, angle: 120, spread: 60, origin: { x: 1, y: 0.7 }, colors }), 400);
     }
   }, [phase, reward]);
+
+  const accent =
+    reward.kind === "cash" ? "#43e0a0" : reward.kind === "boost" ? "#f5c542" : RARITY_META[reward.card.rarity].color;
 
   const resultTitle =
     reward.kind === "cash"
@@ -130,39 +241,74 @@ export default function GachaModal({ reward, caseDef, onClose }: GachaModalProps
         initial={{ scale: 0.92, y: 20 }}
         animate={{ scale: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 260, damping: 24 }}
-        className="glass-deep w-full max-w-[720px] overflow-hidden rounded-3xl"
+        className="glass-deep w-full max-w-[760px] overflow-hidden rounded-3xl"
       >
-        <div className="border-b border-line px-5 py-4">
-          <div className="text-[10px] font-black uppercase tracking-[0.25em] text-fuchsia-400">{caseDef.name}</div>
-          <div className="font-display text-lg font-black text-white">
-            {phase === "spin" ? "Открываем контейнер..." : resultTitle}
+        <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
+          <div>
+            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-fuchsia-400">{caseDef.name}</div>
+            <div className="font-display text-lg font-black text-white">
+              {phase === "reveal" ? resultTitle : "Открываем контейнер…"}
+            </div>
           </div>
+          {phase === "spin" && (
+            <button
+              onClick={skip}
+              className="flex shrink-0 items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-[10.5px] font-black uppercase tracking-widest text-white/45 transition hover:bg-white/10 hover:text-white/80"
+            >
+              <FastForward className="size-3.5" />
+              Пропустить
+            </button>
+          )}
         </div>
 
-        {phase === "spin" ? (
-          <div className="relative py-6">
-            <div ref={boxRef} className="relative h-[176px] overflow-hidden">
-              <motion.div
-                className="absolute left-0 top-0 flex"
-                style={{ gap: CELL_GAP, paddingLeft: 0 }}
-                initial={{ x: 0 }}
-                animate={{ x: targetX }}
-                transition={{ duration: 4.8, ease: [0.12, 0.72, 0.06, 1] }}
-                onAnimationComplete={() => setPhase("reveal")}
+        {phase !== "reveal" ? (
+          <div className="relative py-7">
+            <div ref={boxRef} className="relative overflow-hidden" style={{ height: CELL_H }}>
+              {/* Лента. Позицией управляет rAF — тики щёлкают точно по указателю. */}
+              <div
+                ref={stripRef}
+                className="absolute left-0 top-0 flex will-change-transform"
+                style={{ gap: CELL_GAP }}
               >
                 {strip.map((v, i) => (
                   <div key={i} style={{ width: CELL_W, height: CELL_H }} className="shrink-0">
                     <Cell v={v} />
                   </div>
                 ))}
-              </motion.div>
-              {/* рамки затемнения */}
-              <div className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-night to-transparent" />
-              <div className="pointer-events-none absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-night to-transparent" />
-              {/* Рамка CS:GO точно размера карточки, со стрелками сверху и снизу. */}
-              <div className="pointer-events-none absolute left-1/2 top-0 z-10 h-[176px] w-[118px] -translate-x-1/2 rounded-xl border-2 border-white shadow-[0_0_18px_rgba(255,255,255,.28)]" />
+              </div>
+
+              {/* затемнение краёв */}
+              <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-28 bg-gradient-to-r from-night to-transparent" />
+              <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-28 bg-gradient-to-l from-night to-transparent" />
+
+              {/* центральная линия-указатель */}
+              <div
+                className="pointer-events-none absolute bottom-0 left-1/2 top-0 z-20 w-px -translate-x-1/2 transition-colors duration-300"
+                style={{
+                  background: phase === "land" ? accent : "rgba(255,255,255,.4)",
+                  boxShadow: phase === "land" ? `0 0 12px ${accent}` : "none",
+                }}
+              />
+
+              {/* рамка-прицел: белая в полёте, цвета приза на остановке */}
+              <div
+                className="pointer-events-none absolute left-1/2 top-0 z-20 -translate-x-1/2 rounded-xl border-2 transition-all duration-300"
+                style={{
+                  width: CELL_W,
+                  height: CELL_H,
+                  borderColor: phase === "land" ? accent : "rgba(255,255,255,.9)",
+                  boxShadow:
+                    phase === "land"
+                      ? `0 0 26px ${accent}80, inset 0 0 18px ${accent}30`
+                      : "0 0 18px rgba(255,255,255,.28)",
+                }}
+              />
               <ChevronUp className="pointer-events-none absolute left-1/2 top-[-10px] z-20 size-5 -translate-x-1/2 text-white drop-shadow-[0_0_5px_rgba(255,255,255,.8)]" />
               <ChevronDown className="pointer-events-none absolute bottom-[-10px] left-1/2 z-20 size-5 -translate-x-1/2 text-white drop-shadow-[0_0_5px_rgba(255,255,255,.8)]" />
+            </div>
+
+            <div className="mt-4 text-center text-[10.5px] font-bold uppercase tracking-[0.22em] text-white/25">
+              {phase === "spin" ? "Лента крутится…" : "Выпало!"}
             </div>
           </div>
         ) : (
@@ -186,7 +332,7 @@ export default function GachaModal({ reward, caseDef, onClose }: GachaModalProps
                 }`}
               >
                 <img
-                  src={reward.kind === "cash" ? "/rewards/cash.jpg" : "/rewards/boost.jpg"}
+                  src={reward.kind === "cash" ? A("/rewards/cash.jpg") : A("/rewards/boost.jpg")}
                   alt={reward.kind === "cash" ? "Кэш" : "Буст"}
                   className="size-full rounded-3xl object-cover p-1"
                 />

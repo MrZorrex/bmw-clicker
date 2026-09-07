@@ -8,18 +8,25 @@ import CarStage from "./components/CarStage";
 import Shop from "./components/Shop";
 import GachaModal from "./components/GachaModal";
 import UnlockModal from "./components/UnlockModal";
+import PremiumModal from "./components/PremiumModal";
 import { useGame, type Reward } from "./game/useGame";
 import { CASES, MODELS, PRESTIGE_BONUS, type CarModel, type CaseDef } from "./data/game";
+import { VIP_PERK_ID, productMetaById } from "./data/products";
 import { fmtMoney } from "./game/format";
 import { setSoundSuspended, sfxFail } from "./game/sound";
 import {
+  consumeProduct,
   gameplayStart,
   gameplayStop,
+  getCatalog,
+  isPlayerAuthorized,
   isYandex,
+  listPurchases,
   loadingReady,
   onPlatformPause,
   showInterstitial,
   showRewardedVideo,
+  type YaProduct,
 } from "./game/yandex";
 
 /** Монетизация обязательна для публикации (требование 1.12). */
@@ -35,6 +42,13 @@ export default function App() {
   const [prestigeOpen, setPrestigeOpen] = useState(false);
   const [showOffline, setShowOffline] = useState(game.offlineGain > 0);
   const [showIntro, setShowIntro] = useState(!game.s.introSeen);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [premiumOpen, setPremiumOpen] = useState(false);
+  // каталог инап-покупок из SDK; кнопка магазина видна, только если он непуст (п. 1.13.6)
+  const [catalog, setCatalog] = useState<YaProduct[]>([]);
+  const [authorized, setAuthorized] = useState(isPlayerAuthorized());
+  // показ полноэкранной рекламы — геймплей на паузе (п. 4.7)
+  const [adActive, setAdActive] = useState(false);
 
   // ── SDK Яндекс Игр: готовность, разметка геймплея, паузы ──
   useEffect(() => {
@@ -42,12 +56,39 @@ export default function App() {
     return () => gameplayStop();
   }, []);
 
+  // ── Инап-покупки: каталог + обработка необработанных покупок (п. 1.13.1) ──
   useEffect(() => {
-    // геймплей идёт, когда не открыто ни одно модальное окно
-    const inMenu = showIntro || prestigeOpen || !!unlock || !!gacha;
+    if (!isYandex()) return;
+    void (async () => {
+      const cat = await getCatalog();
+      setCatalog(cat);
+      setAuthorized(isPlayerAuthorized());
+      const purchases = await listPurchases();
+      if (!purchases.length) return;
+      let granted = false;
+      for (const p of purchases) {
+        const meta = productMetaById(p.productID);
+        if (meta?.kind === "permanent" || p.productID === VIP_PERK_ID) {
+          game.grantPerk(p.productID); // постоянная покупка — восстанавливаем эффект
+          granted = true;
+        } else {
+          // расходная покупка без консумации (сбой сети) — выдаём и консумируем
+          game.grantCash(game.cashPileAmount());
+          await consumeProduct(p.purchaseToken);
+          granted = true;
+        }
+      }
+      if (granted) game.saveNow(); // п. 1.9 / 1.13.3 — прогресс фиксируем сразу
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    // геймплей идёт, когда не открыто ни одно модальное окно и не идёт реклама
+    const inMenu = showIntro || prestigeOpen || !!unlock || !!gacha || premiumOpen || resetOpen || adActive;
     if (inMenu) gameplayStop();
     else gameplayStart();
-  }, [showIntro, prestigeOpen, unlock, gacha]);
+  }, [showIntro, prestigeOpen, unlock, gacha, premiumOpen, resetOpen, adActive]);
 
   useEffect(() => {
     // п. 1.3 — при потере фокуса звук останавливается
@@ -98,26 +139,33 @@ export default function App() {
   useEffect(() => {
     if (!adsActive) return;
     const iv = setInterval(() => {
-      if (showIntro || unlock || gacha || prestigeOpen) return;
+      if (showIntro || unlock || gacha || prestigeOpen || premiumOpen || resetOpen || adActive) return;
       if (Date.now() - lastInterstitial.current < 4 * 60_000) return;
       lastInterstitial.current = Date.now();
-      void showInterstitial();
+      setAdActive(true); // п. 4.7 — игровой процесс на паузе на время рекламы
+      void showInterstitial({ onClose: () => setAdActive(false), onError: () => setAdActive(false) });
     }, 60_000);
     return () => clearInterval(iv);
-  }, [showIntro, unlock, gacha, prestigeOpen]);
+  }, [showIntro, unlock, gacha, prestigeOpen, premiumOpen, resetOpen, adActive]);
 
   const openCase = useCallback(
     (c: CaseDef) => {
       const r = game.rollCase(c);
-      if (r) setGacha({ reward: r, caseDef: c });
-      else sfxFail();
+      if (r) {
+        setGacha({ reward: r, caseDef: c });
+        game.saveNow(); // п. 1.9 — прогресс фиксируется сразу после значимого действия
+      } else {
+        sfxFail();
+      }
     },
-    [game.rollCase]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [game.rollCase, game.saveNow]
   );
 
   // Rewarded Video: смотрит рекламу Яндекса → получает бесплатный контейнер (требование 4.5).
   const watchAd = useCallback(() => {
-    if (!adsActive || Date.now() < game.s.adReadyAt) return;
+    if (!adsActive || Date.now() < game.s.adReadyAt || adActive) return;
+    setAdActive(true); // п. 4.7
     void showRewardedVideo({
       onRewarded: () => {
         game.completeAdWatch();
@@ -125,9 +173,11 @@ export default function App() {
         const r = game.rollCase(freeCase, true);
         if (r) setGacha({ reward: r, caseDef: freeCase });
       },
+      onClose: () => setAdActive(false),
+      onError: () => setAdActive(false),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [game.s.adReadyAt, game.completeAdWatch, game.rollCase]);
+  }, [game.s.adReadyAt, game.completeAdWatch, game.rollCase, adActive]);
 
   const doPrestige = useCallback(() => {
     game.prestigeReset();
@@ -138,15 +188,16 @@ export default function App() {
     confetti({ particleCount: 160, spread: 90, origin: { y: 0.5 }, colors: ["#f5c542", "#ffffff", "#1c69d4"] });
   }, [game]);
 
-  const reset = useCallback(() => {
-    if (window.confirm("Сбросить весь прогресс (включая круги и бонусы) и начать с Dixi 1928 года?")) {
-      game.reset();
-      setUnlock(null);
-      setGacha(null);
-      setShowOffline(false);
-      setPrestigeOpen(false);
-      setShowIntro(true);
-    }
+  // Подтверждение — собственная модалка, а не window.confirm:
+  // нативные диалоги в iframe платформы ненадёжны (п. 1.14).
+  const confirmReset = useCallback(() => {
+    game.reset();
+    setUnlock(null);
+    setGacha(null);
+    setShowOffline(false);
+    setPrestigeOpen(false);
+    setResetOpen(false);
+    setShowIntro(true);
   }, [game]);
 
   useEffect(() => {
@@ -186,7 +237,8 @@ export default function App() {
           boostUntil={s.boostUntil}
           sound={s.sound}
           onToggleSound={game.toggleSound}
-          onReset={reset}
+          onReset={() => setResetOpen(true)}
+          onOpenPremium={catalog.length > 0 ? () => setPremiumOpen(true) : undefined}
         />
         <Timeline modelIndex={s.modelIndex} />
       </div>
@@ -216,7 +268,15 @@ export default function App() {
 
       {/* модалки */}
       <AnimatePresence>
-        {gacha && <GachaModal key="gacha" reward={gacha.reward} caseDef={gacha.caseDef} onClose={() => setGacha(null)} />}
+        {gacha && (
+          <GachaModal
+            key="gacha"
+            reward={gacha.reward}
+            caseDef={gacha.caseDef}
+            modelBase={game.model.base}
+            onClose={() => setGacha(null)}
+          />
+        )}
         {unlock && <UnlockModal key={unlock.id} model={unlock} onClose={() => setUnlock(null)} />}
         {prestigeOpen && (
           <PrestigeModal
@@ -225,6 +285,19 @@ export default function App() {
             onConfirm={doPrestige}
             onClose={() => setPrestigeOpen(false)}
           />
+        )}
+        {premiumOpen && catalog.length > 0 && (
+          <PremiumModal
+            key="premium"
+            catalog={catalog}
+            game={game}
+            playerAuthorized={authorized}
+            onClose={() => setPremiumOpen(false)}
+            onSynced={() => game.saveNow()}
+          />
+        )}
+        {resetOpen && (
+          <ResetModal key="reset" onConfirm={confirmReset} onClose={() => setResetOpen(false)} />
         )}
       </AnimatePresence>
 
@@ -343,6 +416,51 @@ function PrestigeModal({
               НОВЫЙ КРУГ
             </button>
           </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── Подтверждение сброса прогресса ──────────────────────────
+
+function ResetModal({ onConfirm, onClose }: { onConfirm: () => void; onClose: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-night/90 p-4 backdrop-blur-lg"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 24 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.92, y: 16, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 240, damping: 22 }}
+        onClick={(e) => e.stopPropagation()}
+        className="glass-deep my-auto w-full max-w-[420px] overflow-hidden rounded-3xl p-6 text-center"
+      >
+        <div className="mx-auto grid size-14 place-items-center rounded-3xl border border-mred/30 bg-mred/10">
+          <X className="size-7 text-mred" />
+        </div>
+        <h2 className="mt-3 font-display text-lg font-black text-white">СБРОСИТЬ ПРОГРЕСС?</h2>
+        <p className="mt-1.5 text-[12.5px] font-medium leading-relaxed text-white/55">
+          Весь гараж, прокачка, карты удачи и бонусы кругов сгорят безвозвратно. Начнёшь заново с Dixi 1928 года.
+        </p>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button
+            onClick={onClose}
+            className="rounded-2xl border border-white/10 bg-white/5 py-3.5 font-display text-[12px] font-black tracking-wide text-white/60 transition hover:bg-white/10"
+          >
+            ОСТАВИТЬ
+          </button>
+          <button
+            onClick={onConfirm}
+            className="rounded-2xl border border-mred/40 bg-mred/15 py-3.5 font-display text-[12px] font-black tracking-wide text-mred transition hover:bg-mred/25 active:scale-[0.98]"
+          >
+            СБРОСИТЬ ВСЁ
+          </button>
         </div>
       </motion.div>
     </motion.div>

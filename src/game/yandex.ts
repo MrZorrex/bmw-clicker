@@ -21,10 +21,23 @@ export interface YaPurchase {
   developerPayload?: string;
 }
 
+/** Товар из каталога Консоли разработчика (payments.getCatalog). */
+export interface YaProduct {
+  id: string;
+  title: string;
+  description: string;
+  imageURI: string;
+  price: string; // "<цена> <код валюты>"
+  priceValue: string;
+  priceCurrencyCode: string;
+  getPriceCurrencyImage(size: "small" | "medium" | "svg"): string;
+}
+
 export interface YaPayments {
   purchase(opts: { id: string; developerPayload?: string }): Promise<YaPurchase>;
-  getPurchases(): Promise<YaPurchase[]>;
+  getPurchases(): Promise<YaPurchase[] | { signature: string }>;
   consumePurchase(token: string): Promise<void>;
+  getCatalog(): Promise<YaProduct[]>;
 }
 
 export interface YaSdk {
@@ -35,6 +48,8 @@ export interface YaSdk {
   getPlayer(opts?: { scopes?: boolean }): Promise<YaPlayer>;
   getStorage(): Promise<Storage>;
   getPayments?(opts?: { signed?: boolean }): Promise<YaPayments>;
+  /** Объект покупок доступен и напрямую — лениво инициализируется при первом вызове. */
+  payments?: YaPayments;
   on(event: string, cb: () => void): void;
   off?(event: string, cb: () => void): void;
   auth?: { openAuthDialog(): Promise<void> };
@@ -73,21 +88,80 @@ let gameplayRunning = false;
 
 export const isYandex = () => ysdk !== null;
 
-/** IAP Яндекс Игр. Покупки доступны только на платформе, вне её это no-op. */
+// ── Инап-покупки ───────────────────────────────────────────────
+// Обработка платежей — на клиенте (сервера у игры нет), поэтому по доке
+// getPayments() вызывается БЕЗ параметра signed: данные приходят в открытом
+// виде. Покупки доступны только на платформе; вне её — безопасный no-op.
+
+let paymentsMod: YaPayments | null = null;
+let paymentsTried = false;
+
+/** Ленивая инициализация модуля покупок. null — покупки недоступны. */
+export async function getPaymentsModule(): Promise<YaPayments | null> {
+  if (paymentsMod) return paymentsMod;
+  if (!ysdk || paymentsTried) return paymentsMod;
+  paymentsTried = true; // не дёргаем инициализацию повторно
+  try {
+    paymentsMod = ysdk.getPayments ? await ysdk.getPayments() : (ysdk.payments ?? null);
+  } catch {
+    paymentsMod = ysdk.payments ?? null;
+  }
+  return paymentsMod;
+}
+
+/** Каталог товаров из Консоли разработчика — источник цены и валюты (п. 1.13.2). */
+export async function getCatalog(): Promise<YaProduct[]> {
+  try {
+    const p = await getPaymentsModule();
+    return p ? await p.getCatalog() : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Покупки игрока (для проверки необработанных покупок, п. 1.13.1). */
+export async function listPurchases(): Promise<YaPurchase[]> {
+  try {
+    const p = await getPaymentsModule();
+    if (!p) return [];
+    const res = await p.getPurchases();
+    return Array.isArray(res) ? res : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function buyProduct(productId: string, developerPayload?: string): Promise<YaPurchase | null> {
   try {
-    const payments = await ysdk?.getPayments?.({ signed: true });
-    return payments ? await payments.purchase({ id: productId, developerPayload }) : null;
+    const p = await getPaymentsModule();
+    return p ? await p.purchase({ id: productId, developerPayload }) : null;
   } catch {
+    // игрок закрыл окно оплаты, не авторизован, нет средств и т. д.
     return null;
   }
 }
 
 export async function consumeProduct(token: string): Promise<boolean> {
   try {
-    const payments = await ysdk?.getPayments?.({ signed: true });
-    if (!payments) return false;
-    await payments.consumePurchase(token);
+    const p = await getPaymentsModule();
+    if (!p) return false;
+    await p.consumePurchase(token);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Авторизация через Яндекс ID — только по явному действию игрока (п. 1.2.1). */
+export async function openAuthDialog(): Promise<boolean> {
+  try {
+    if (!ysdk?.auth) return false;
+    await ysdk.auth.openAuthDialog();
+    try {
+      player = await ysdk!.getPlayer();
+    } catch {
+      /* noop */
+    }
     return true;
   } catch {
     return false;
@@ -98,6 +172,14 @@ export const getPlayerName = () => {
     return player?.isAuthorized() ? player.getName() : "";
   } catch {
     return "";
+  }
+};
+
+export const isPlayerAuthorized = () => {
+  try {
+    return !!player?.isAuthorized();
+  } catch {
+    return false;
   }
 };
 

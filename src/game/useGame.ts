@@ -22,6 +22,7 @@ import {
 } from "../data/game";
 import { setSoundEnabled, sfxBuy, sfxWin } from "./sound";
 import { cloudSave, getCloudSnapshot } from "./yandex";
+import { CASH_PILE_FALLBACK_BASE_MULT, CASH_PILE_SHARE, VIP_PERK_BONUS, VIP_PERK_ID } from "../data/products";
 
 // ─── Типы ────────────────────────────────────────────────────
 
@@ -43,6 +44,8 @@ export interface GameState {
   sound: boolean;
   introSeen: boolean;
   lastSeen: number;
+  /** Постоянные перки из инап-покупок: id товара → 1. Переживают новые круги. */
+  perks: Record<string, number>;
 }
 
 export type Reward =
@@ -70,6 +73,7 @@ const initialState = (): GameState => ({
   sound: true,
   introSeen: false,
   lastSeen: Date.now(),
+  perks: {},
 });
 
 function readLocal(): Partial<GameState> | null {
@@ -147,6 +151,8 @@ export function useGame() {
   const prestigeMult = 1 + PRESTIGE_BONUS * s.prestige;
   const boostActive = s.boostUntil > Date.now();
   const boostF = boostActive ? s.boostMult : 1;
+  // постоянный перк из инап-покупки «Перекуп года»
+  const perkMult = 1 + VIP_PERK_BONUS * (s.perks[VIP_PERK_ID] ?? 0);
 
   // крит: базовый шанс + прокачка + карты удачи
   const critCardPct = useMemo(
@@ -162,13 +168,13 @@ export function useGame() {
   const critMult = CRIT_BASE_MULT + critPowerDef.step * (s.critLv[critPowerDef.id] ?? 0);
 
   const clickPower = useMemo(
-    () => model.base * (1 + sumPct(CLICK_UPGRADES, s.clickLv)) * cardMult * boostF * prestigeMult,
-    [model, s.clickLv, cardMult, boostF, prestigeMult]
+    () => model.base * (1 + sumPct(CLICK_UPGRADES, s.clickLv)) * cardMult * boostF * prestigeMult * perkMult,
+    [model, s.clickLv, cardMult, boostF, prestigeMult, perkMult]
   );
 
   const cps = useMemo(
-    () => model.base * sumPct(AUTO_UPGRADES, s.autoLv) * cardMult * boostF * prestigeMult,
-    [model, s.autoLv, cardMult, boostF, prestigeMult]
+    () => model.base * sumPct(AUTO_UPGRADES, s.autoLv) * cardMult * boostF * prestigeMult * perkMult,
+    [model, s.autoLv, cardMult, boostF, prestigeMult, perkMult]
   );
 
   // автокликер
@@ -346,13 +352,14 @@ export function useGame() {
     [s.money, s.critLv]
   );
 
-  /** Каждое открытие делает контейнер дороже — рандом не должен быть бесконечно выгодным. */
+  /**
+   * Цена контейнера НЕ привязана к машине: startPrice × priceGrowth^открытия —
+   * прогрессия как у прокачки. Каждое открытие делает контейнер дороже,
+   * поэтому рандом не бесконечно выгоден, но смена авто цену не дёргает.
+   */
   const casePrice = useCallback(
-    (c: CaseDef) => {
-      const opens = s.caseOpens[c.id] ?? 0;
-      return Math.max(c.minPrice, c.mult * model.base) * Math.pow(c.priceGrowth, opens);
-    },
-    [model, s.caseOpens]
+    (c: CaseDef) => c.startPrice * Math.pow(c.priceGrowth, s.caseOpens[c.id] ?? 0),
+    [s.caseOpens]
   );
 
   const rollCase = useCallback(
@@ -422,6 +429,26 @@ export function useGame() {
     setS((p) => ({ ...p, adReadyAt: Date.now() + AD_COOLDOWN_SECS * 1000 }));
   }, []);
 
+  // ── Инап-покупки ────────────────────────────────────────────
+
+  /** Сумма выдачи расходного товара cash_pile: доля цены следующей машины. */
+  const cashPileAmount = useCallback((): number => {
+    const base = next ? next.price * CASH_PILE_SHARE : model.base * CASH_PILE_FALLBACK_BASE_MULT;
+    return Math.max(1, Math.round(base));
+  }, [next, model]);
+
+  /** Начислить наличные (расходная покупка). */
+  const grantCash = useCallback((amount: number) => {
+    setS((p) => ({ ...p, money: p.money + amount, totalEarned: p.totalEarned + amount }));
+    sfxWin();
+  }, []);
+
+  /** Активировать постоянный перк (идемпотентно — для постоянных покупок). */
+  const grantPerk = useCallback((id: string) => {
+    setS((p) => (p.perks[id] ? p : { ...p, perks: { ...p.perks, [id]: 1 } }));
+    sfxWin();
+  }, []);
+
   const canPrestige = s.modelIndex === MODELS.length - 1;
 
   const prestigeReset = useCallback(() => {
@@ -469,6 +496,10 @@ export function useGame() {
     isFresh: loaded.isFresh,
     click,
     saveNow,
+    perkMult,
+    cashPileAmount,
+    grantCash,
+    grantPerk,
     buyNext,
     buyUpgrade,
     buyBot,
