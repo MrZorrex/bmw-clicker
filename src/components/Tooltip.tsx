@@ -8,13 +8,23 @@ interface TooltipProps {
   color?: string;
   children: ReactNode;
   className?: string;
+  /** К какому краю прижать всплывашку, чтобы не вылезала за экран (п. 1.10.1). */
+  align?: "left" | "right";
 }
 
 /**
  * Всплывающая подсказка: объясняет, что значит показатель и от чего он зависит.
  * Работает и на тач-устройствах (по нажатию).
  */
-export default function Tooltip({ title, lines, hint, color = "#5aa9ff", children, className }: TooltipProps) {
+export default function Tooltip({
+  title,
+  lines,
+  hint,
+  color = "#5aa9ff",
+  children,
+  className,
+  align = "right",
+}: TooltipProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -35,11 +45,15 @@ export default function Tooltip({ title, lines, hint, color = "#5aa9ff", childre
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.96 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className="pointer-events-none absolute right-0 top-[calc(100%+10px)] z-50 w-[268px] origin-top-right"
+            className={`pointer-events-none absolute top-[calc(100%+10px)] z-50 w-[268px] max-w-[calc(100vw-2rem)] ${
+              align === "right" ? "right-0 origin-top-right" : "left-0 origin-top-left"
+            }`}
           >
             {/* стрелка */}
             <div
-              className="absolute -top-1.5 right-6 size-3 rotate-45 border-l border-t"
+              className={`absolute -top-1.5 size-3 rotate-45 border-l border-t ${
+                align === "right" ? "right-6" : "left-6"
+              }`}
               style={{ borderColor: `${color}45`, background: "#0d131c" }}
             />
             <div

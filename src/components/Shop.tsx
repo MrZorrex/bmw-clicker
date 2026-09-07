@@ -60,6 +60,8 @@ import {
 } from "../data/game";
 import { fmt, fmtMoney, fmtRate, fmtTime } from "../game/format";
 import { upgradeCost, type useGame } from "../game/useGame";
+import { fill, useI18n } from "../i18n";
+import { cardText, caseText, modelText, upgradeText } from "../i18n/data";
 import CarImage from "./CarImage";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -90,6 +92,7 @@ interface ShopProps {
 type Tab = "models" | "upgrades" | "luck";
 
 export default function Shop({ game, onBuyNext, onOpenCase, onWatchAd, adsEnabled = false }: ShopProps) {
+  const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("models");
   const { s } = game;
 
@@ -100,27 +103,27 @@ export default function Shop({ game, onBuyNext, onOpenCase, onWatchAd, adsEnable
   const cardsOwned = Object.keys(s.cards).length;
 
   return (
-    <aside className="flex min-h-[440px] flex-col overflow-hidden rounded-3xl border border-line bg-panel lg:h-full lg:min-h-0">
+    <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-3xl border border-line bg-panel">
       {/* табы */}
       <div className="grid grid-cols-3 gap-1 border-b border-line bg-night/50 p-2">
         {(
           [
-            { id: "models", label: "Тачки", badge: `${s.modelIndex + 1}` },
-            { id: "upgrades", label: "Прокачка", badge: totalLv > 0 ? String(totalLv) : "" },
-            { id: "luck", label: "Удача", badge: cardsOwned > 0 ? String(cardsOwned) : "" },
+            { id: "models", label: t.shop.tabModels, badge: `${s.modelIndex + 1}` },
+            { id: "upgrades", label: t.shop.tabUpgrades, badge: totalLv > 0 ? String(totalLv) : "" },
+            { id: "luck", label: t.shop.tabLuck, badge: cardsOwned > 0 ? String(cardsOwned) : "" },
           ] as const
-        ).map((t) => (
+        ).map((tabDef) => (
           <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`relative rounded-xl px-2 py-2.5 text-[12px] font-extrabold uppercase tracking-wider transition sm:text-[13px] ${
-              tab === t.id ? "bg-white/10 text-white" : "text-white/40 hover:bg-white/5 hover:text-white/70"
+            key={tabDef.id}
+            onClick={() => setTab(tabDef.id)}
+            className={`tap-min relative rounded-xl px-2 py-2.5 text-[12px] font-extrabold uppercase tracking-wider transition sm:text-[13px] ${
+              tab === tabDef.id ? "bg-white/10 text-white" : "text-white/40 hover:bg-white/5 hover:text-white/70"
             }`}
           >
-            {t.label}
-            {t.badge && (
+            {tabDef.label}
+            {tabDef.badge && (
               <span className="ml-1.5 rounded-full bg-bmw/25 px-1.5 py-0.5 text-[9px] font-black text-bmw-soft">
-                {t.badge}
+                {tabDef.badge}
               </span>
             )}
           </button>
@@ -138,9 +141,9 @@ export default function Shop({ game, onBuyNext, onOpenCase, onWatchAd, adsEnable
       {/* футер-статистика */}
       <div className="grid grid-cols-3 divide-x divide-white/5 border-t border-line bg-night/50 text-center">
         {[
-          { v: fmt(s.clicks), l: "кликов" },
-          { v: fmt(s.totalEarned) + " ₽", l: "заработано" },
-          { v: `+${Math.round(game.totalCardPct * 100)}%`, l: "бонус удачи" },
+          { v: fmt(s.clicks), l: t.shop.statClicks },
+          { v: fmt(s.totalEarned) + " ₽", l: t.shop.statEarned },
+          { v: `+${Math.round(game.totalCardPct * 100)}%`, l: t.shop.statLuck },
         ].map((x) => (
           <div key={x.l} className="px-1 py-2.5">
             <div className="tabular font-display text-[12px] font-bold text-white/85">{x.v}</div>
@@ -155,6 +158,7 @@ export default function Shop({ game, onBuyNext, onOpenCase, onWatchAd, adsEnable
 // ─── Модели ──────────────────────────────────────────────────
 
 function ModelsTab({ game, onBuyNext }: { game: Game; onBuyNext: () => void }) {
+  const { t, lang } = useI18n();
   const { s } = game;
   return (
     <div className="flex flex-col gap-2">
@@ -164,6 +168,7 @@ function ModelsTab({ game, onBuyNext }: { game: Game; onBuyNext: () => void }) {
         const next = i === s.modelIndex + 1;
         const locked = i > s.modelIndex + 1;
         const afford = next && s.money >= m.price;
+        const mt = modelText(lang, m);
         return (
           <div
             key={m.id}
@@ -193,28 +198,28 @@ function ModelsTab({ game, onBuyNext }: { game: Game; onBuyNext: () => void }) {
                 {locked ? "???" : m.name}
               </div>
               <div className="text-[10.5px] font-semibold text-white/35">
-                {m.years} · {m.era}
+                {mt.years} · {mt.era}
               </div>
               {!locked && (
-                <div className="tabular text-[10.5px] font-bold text-mint/80">+{fmt(m.base)} ₽/клик</div>
+                <div className="tabular text-[10.5px] font-bold text-mint/80">+{fmt(m.base)} ₽{t.common.perClick}</div>
               )}
             </div>
             <div className="shrink-0">
               {current && (
                 <span className="rounded-full bg-bmw px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-white">
-                  В гараже
+                  {t.shop.inGarage}
                 </span>
               )}
               {owned && (
                 <span className="flex items-center gap-1 rounded-full border border-white/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-white/40">
-                  <Check className="size-3" /> Продана
+                  <Check className="size-3" /> {t.shop.sold}
                 </span>
               )}
               {next && (
                 <button
                   onClick={onBuyNext}
                   disabled={!afford}
-                  className={`tabular rounded-xl px-3 py-2 font-display text-[11px] font-black transition ${
+                  className={`tabular tap-min-sm rounded-xl px-3 py-2 font-display text-[11px] font-black transition ${
                     afford
                       ? "bg-gradient-to-r from-bmw to-bmw-soft text-white hover:brightness-110 active:scale-95"
                       : "border border-white/10 bg-white/5 text-white/35"
@@ -242,14 +247,17 @@ function UpgradeRow({
   kind: "click" | "auto";
   game: Game;
 }) {
+  const { t, lang } = useI18n();
   const { s, model, cardMult } = game;
   const lv = (kind === "click" ? s.clickLv : s.autoLv)[def.id] ?? 0;
   const cost = upgradeCost(def, lv);
   const afford = s.money >= cost;
   const Icon = ICONS[def.icon] ?? Sparkles;
+  const ut = upgradeText(lang, def.id, def);
   // отдача именно СЛЕДУЮЩЕГО уровня — каждый уровень мощнее предыдущего
   const perLevel = levelGain(def.pct, lv) * model.base * cardMult * game.prestigeMult;
   const owned = levelTotal(def.pct, lv) * model.base * cardMult * game.prestigeMult;
+  const unit = kind === "auto" ? ` ₽${t.common.perSec}` : " ₽";
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-white/5 bg-white/[0.02] p-2.5 transition hover:border-white/10">
       <div
@@ -261,23 +269,23 @@ function UpgradeRow({
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-1.5">
-          <span className="truncate text-[13px] font-extrabold text-white/90">{def.name}</span>
+          <span className="truncate text-[13px] font-extrabold text-white/90">{ut.name}</span>
           {lv > 0 && (
             <span className="shrink-0 rounded bg-white/10 px-1.5 py-px text-[9px] font-black text-white/60">
-              {lv} ур.
+              {fill(t.common.levelFmt, { lv })}
             </span>
           )}
         </div>
-        <div className="truncate text-[10.5px] font-medium text-white/35">{def.flavor}</div>
+        <div className="truncate text-[10.5px] font-medium text-white/35">{ut.flavor}</div>
         <div className={`tabular text-[10.5px] font-bold ${kind === "click" ? "text-bmw-soft/90" : "text-mint/90"}`}>
-          +{fmt(perLevel)} ₽{kind === "auto" ? "/с" : ""} за след. уровень
-          {lv > 0 && <span className="text-white/30"> · сейчас +{fmt(owned)}</span>}
+          +{fmt(perLevel)}{unit} {t.shop.forNextLevel}
+          {lv > 0 && <span className="text-white/30"> {fill(t.shop.nowGain, { x: fmt(owned) })}</span>}
         </div>
       </div>
       <button
         onClick={() => game.buyUpgrade(def, kind)}
         disabled={!afford}
-        className={`tabular shrink-0 rounded-xl px-3 py-2 font-display text-[11px] font-black transition ${
+        className={`tabular tap-min-sm shrink-0 rounded-xl px-3 py-2 font-display text-[11px] font-black transition ${
           afford
             ? kind === "click"
               ? "bg-gradient-to-r from-bmw to-bmw-soft text-white hover:brightness-110 active:scale-95"
@@ -292,11 +300,13 @@ function UpgradeRow({
 }
 
 function BotRow({ def, game }: { def: BotUpgradeDef; game: Game }) {
+  const { t, lang } = useI18n();
   const { s } = game;
   const lv = s.botLv[def.id] ?? 0;
   const cost = upgradeCost(def, lv);
   const afford = s.money >= cost;
   const Icon = ICONS[def.icon] ?? Bot;
+  const ut = upgradeText(lang, def.id, def);
   const perLevel = levelGain(def.cps, lv) * game.botSpeedMult;
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-white/5 bg-white/[0.02] p-2.5 transition hover:border-white/10">
@@ -305,25 +315,25 @@ function BotRow({ def, game }: { def: BotUpgradeDef; game: Game }) {
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-1.5">
-          <span className="truncate text-[13px] font-extrabold text-white/90">{def.name}</span>
+          <span className="truncate text-[13px] font-extrabold text-white/90">{ut.name}</span>
           {lv > 0 && (
             <span className="shrink-0 rounded bg-white/10 px-1.5 py-px text-[9px] font-black text-white/60">
-              {lv} ур.
+              {fill(t.common.levelFmt, { lv })}
             </span>
           )}
         </div>
-        <div className="truncate text-[10.5px] font-medium text-white/35">{def.flavor}</div>
+        <div className="truncate text-[10.5px] font-medium text-white/35">{ut.flavor}</div>
         <div className="tabular text-[10.5px] font-bold text-teal-300/90">
-          +{fmtRate(perLevel)} клик/с за след. уровень
+          +{fmtRate(perLevel)} {t.common.clicksPerSec} {t.shop.forNextLevel}
           {lv > 0 && (
-            <span className="text-white/30"> · сейчас {fmtRate(levelTotal(def.cps, lv) * game.botSpeedMult)}</span>
+            <span className="text-white/30"> {fill(t.shop.nowRate, { x: fmtRate(levelTotal(def.cps, lv) * game.botSpeedMult) })}</span>
           )}
         </div>
       </div>
       <button
         onClick={() => game.buyBot(def)}
         disabled={!afford}
-        className={`tabular shrink-0 rounded-xl px-3 py-2 font-display text-[11px] font-black transition ${
+        className={`tabular tap-min-sm shrink-0 rounded-xl px-3 py-2 font-display text-[11px] font-black transition ${
           afford
             ? "bg-gradient-to-r from-teal-600 to-teal-400 text-night hover:brightness-110 active:scale-95"
             : "border border-white/10 bg-white/5 text-white/35"
@@ -336,14 +346,17 @@ function BotRow({ def, game }: { def: BotUpgradeDef; game: Game }) {
 }
 
 function CritRow({ def, game }: { def: CritUpgradeDef; game: Game }) {
+  const { t, lang } = useI18n();
   const { s } = game;
   const lv = s.critLv[def.id] ?? 0;
   const maxed = lv >= def.maxLv;
   const cost = upgradeCost(def, lv);
   const afford = s.money >= cost && !maxed;
   const Icon = ICONS[def.icon] ?? Flame;
+  const ut = upgradeText(lang, def.id, def);
+  const stepFmt = (def.step * 100).toFixed(1).replace(".", lang === "en" ? "." : ",").replace(/\.0$/, "").replace(/,0$/, "");
   const perLevel =
-    def.id === "critChance" ? `+${(def.step * 100).toFixed(1)}% шанса` : `+×${def.step} к урону крита`;
+    def.id === "critChance" ? fill(t.shop.critChanceStep, { x: stepFmt }) : fill(t.shop.critPowerStep, { x: def.step });
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-white/5 bg-white/[0.02] p-2.5 transition hover:border-white/10">
       <div className="grid size-11 shrink-0 place-items-center rounded-xl border border-gold/25 bg-gold/10 text-gold">
@@ -351,24 +364,24 @@ function CritRow({ def, game }: { def: CritUpgradeDef; game: Game }) {
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-1.5">
-          <span className="truncate text-[13px] font-extrabold text-white/90">{def.name}</span>
+          <span className="truncate text-[13px] font-extrabold text-white/90">{ut.name}</span>
           <span className="shrink-0 rounded bg-white/10 px-1.5 py-px text-[9px] font-black text-white/60">
             {lv}/{def.maxLv}
           </span>
         </div>
-        <div className="truncate text-[10.5px] font-medium text-white/35">{def.flavor}</div>
-        <div className="tabular text-[10.5px] font-bold text-gold/90">{perLevel} за уровень</div>
+        <div className="truncate text-[10.5px] font-medium text-white/35">{ut.flavor}</div>
+        <div className="tabular text-[10.5px] font-bold text-gold/90">{perLevel} {t.shop.perLevel}</div>
       </div>
       <button
         onClick={() => game.buyCrit(def)}
         disabled={!afford}
-        className={`tabular shrink-0 rounded-xl px-3 py-2 font-display text-[11px] font-black transition ${
+        className={`tabular tap-min-sm shrink-0 rounded-xl px-3 py-2 font-display text-[11px] font-black transition ${
           afford
             ? "bg-gradient-to-r from-amber-500 to-gold text-night hover:brightness-110 active:scale-95"
             : "border border-white/10 bg-white/5 text-white/35"
         }`}
       >
-        {maxed ? "МАКС" : fmtMoney(cost)}
+        {maxed ? t.common.max : fmtMoney(cost)}
       </button>
     </div>
   );
@@ -378,18 +391,20 @@ function NextUnlockHint({
   defs,
   lv,
 }: {
-  defs: { id: string; name: string }[];
+  defs: { id: string; name: string; flavor: string }[];
   lv: Record<string, number>;
 }) {
+  const { t, lang } = useI18n();
   const open = unlockedCount(defs, lv);
   if (open >= defs.length) return null;
   const prev = defs[open - 1];
   const have = lv[prev.id] ?? 0;
+  const prevName = upgradeText(lang, prev.id, prev).name;
   return (
     <div className="flex items-center gap-2 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-3 py-2.5">
       <Lock className="size-3.5 shrink-0 text-white/25" />
       <span className="text-[10.5px] font-semibold leading-snug text-white/30">
-        Прокачай «{prev.name}» до {UPGRADE_UNLOCK_LV} ур., чтобы открыть следующее{" "}
+        {fill(t.shop.unlockHint, { name: prevName, n: UPGRADE_UNLOCK_LV })}{" "}
         <span className="tabular text-white/45">
           ({have}/{UPGRADE_UNLOCK_LV})
         </span>
@@ -399,6 +414,7 @@ function NextUnlockHint({
 }
 
 function UpgradesTab({ game }: { game: Game }) {
+  const { t } = useI18n();
   const { s } = game;
   const clickOpen = unlockedCount(CLICK_UPGRADES, s.clickLv);
   const critOpen = unlockedCount(CRIT_UPGRADES, s.critLv);
@@ -409,7 +425,7 @@ function UpgradesTab({ game }: { game: Game }) {
     <div className="flex flex-col gap-4">
       <section>
         <h3 className="mb-2 flex items-center gap-1.5 px-1 text-[10px] font-black uppercase tracking-[0.2em] text-bmw-soft">
-          <MousePointerClick className="size-3.5" /> Сила клика
+          <MousePointerClick className="size-3.5" /> {t.shop.secClick}
         </h3>
         <div className="flex flex-col gap-2">
           {CLICK_UPGRADES.slice(0, clickOpen).map((d) => (
@@ -418,13 +434,13 @@ function UpgradesTab({ game }: { game: Game }) {
           <NextUnlockHint defs={CLICK_UPGRADES} lv={s.clickLv} />
         </div>
         <p className="mt-1.5 px-1 text-[10px] font-medium leading-relaxed text-white/30">
-          Каждый следующий уровень апгрейда сильнее предыдущего на {Math.round((LEVEL_GROWTH - 1) * 100)}%.
+          {fill(t.shop.levelNote, { p: Math.round((LEVEL_GROWTH - 1) * 100) })}
         </p>
       </section>
       <section>
         <h3 className="mb-2 flex items-center justify-between px-1 text-[10px] font-black uppercase tracking-[0.2em] text-gold">
           <span className="flex items-center gap-1.5">
-            <Flame className="size-3.5" /> Критический торг
+            <Flame className="size-3.5" /> {t.shop.secCrit}
           </span>
           <span className="tabular rounded-full bg-gold/10 px-2 py-0.5 text-[9px] text-gold">
             {Math.round(game.critChance * 100)}% · ×{game.critMult}
@@ -437,12 +453,12 @@ function UpgradesTab({ game }: { game: Game }) {
           <NextUnlockHint defs={CRIT_UPGRADES} lv={s.critLv} />
         </div>
         <p className="mt-1.5 px-1 text-[10px] font-medium leading-relaxed text-white/30">
-          Крит срабатывает случайно и умножает доход с клика. Работает и на автокликах.
+          {t.shop.critNote}
         </p>
       </section>
       <section>
         <h3 className="mb-2 flex items-center gap-1.5 px-1 text-[10px] font-black uppercase tracking-[0.2em] text-mint">
-          <TrendingUp className="size-3.5" /> Пассивный доход
+          <TrendingUp className="size-3.5" /> {t.shop.secPassive}
         </h3>
         <div className="flex flex-col gap-2">
           {AUTO_UPGRADES.slice(0, autoOpen).map((d) => (
@@ -454,11 +470,11 @@ function UpgradesTab({ game }: { game: Game }) {
       <section>
         <h3 className="mb-2 flex items-center justify-between px-1 text-[10px] font-black uppercase tracking-[0.2em] text-teal-300">
           <span className="flex items-center gap-1.5">
-            <Bot className="size-3.5" /> Автокликер
+            <Bot className="size-3.5" /> {t.shop.secBot}
           </span>
           {game.botClicks > 0 && (
             <span className="tabular rounded-full bg-teal-400/10 px-2 py-0.5 text-[9px] text-teal-300">
-              Σ {fmtRate(game.botClicks)} клик/с
+              Σ {fmtRate(game.botClicks)} {t.common.clicksPerSec}
             </span>
           )}
         </h3>
@@ -469,7 +485,7 @@ function UpgradesTab({ game }: { game: Game }) {
           <NextUnlockHint defs={BOT_UPGRADES} lv={s.botLv} />
         </div>
         <p className="mt-1.5 px-1 text-[10px] font-medium leading-relaxed text-white/30">
-          Автокликер кликает за тебя: каждый автоклик приносит столько же, сколько твой обычный клик.
+          {t.shop.botNote}
         </p>
       </section>
     </div>
@@ -479,15 +495,16 @@ function UpgradesTab({ game }: { game: Game }) {
 // ─── Удача ───────────────────────────────────────────────────
 
 function OddsRow({ c }: { c: CaseDef }) {
+  const { t } = useI18n();
   const w = c.weights;
   const total = w.cash + w.boost + w.common + w.rare + w.epic + w.legend;
   const items = [
-    { label: "Кэш", v: w.cash, color: "#43e0a0" },
-    { label: "Буст", v: w.boost, color: "#f5c542" },
-    { label: "Обыч.", v: w.common, color: RARITY_META.common.color },
-    { label: "Редк.", v: w.rare, color: RARITY_META.rare.color },
-    { label: "Эпик", v: w.epic, color: RARITY_META.epic.color },
-    { label: "Лег.", v: w.legend, color: RARITY_META.legend.color },
+    { label: t.shop.oddsCash, v: w.cash, color: "#43e0a0" },
+    { label: t.shop.oddsBoost, v: w.boost, color: "#f5c542" },
+    { label: t.shop.oddsCommon, v: w.common, color: RARITY_META.common.color },
+    { label: t.shop.oddsRare, v: w.rare, color: RARITY_META.rare.color },
+    { label: t.shop.oddsEpic, v: w.epic, color: RARITY_META.epic.color },
+    { label: t.shop.oddsLegend, v: w.legend, color: RARITY_META.legend.color },
   ];
   return (
     <div>
@@ -509,13 +526,15 @@ function OddsRow({ c }: { c: CaseDef }) {
 }
 
 export function CardFace({ card, count, size = "md" }: { card: CardDef; count?: number; size?: "sm" | "md" }) {
+  const { t, lang } = useI18n();
   const meta = RARITY_META[card.rarity];
   const Icon = CARD_ICONS[card.id] ?? Gem;
   const owned = (count ?? 1) > 0;
+  const ct = cardText(lang, card);
   const bonusText = card.botPct
-    ? `+${Math.round(card.botPct * 100)}% авто`
+    ? fill(t.shop.cardAuto, { x: Math.round(card.botPct * 100) })
     : card.critPct
-      ? `+${Math.round(card.critPct * 100)}% крит`
+      ? fill(t.shop.cardCrit, { x: Math.round(card.critPct * 100) })
       : `+${Math.round(card.pct * 100)}%`;
   const [failed, setFailed] = useState(false);
   return (
@@ -530,7 +549,7 @@ export function CardFace({ card, count, size = "md" }: { card: CardDef; count?: 
       {card.img && !failed ? (
         <img
           src={card.img}
-          alt={card.name}
+          alt={ct.name}
           className={`w-full object-cover ${size === "sm" ? "h-[58%]" : "h-28"} ${owned ? "" : "grayscale opacity-30"}`}
           loading="lazy"
           onError={() => setFailed(true)}
@@ -542,7 +561,7 @@ export function CardFace({ card, count, size = "md" }: { card: CardDef; count?: 
       )}
       <div className="flex min-h-0 flex-1 flex-col justify-between p-2">
         <div className={`line-clamp-2 font-extrabold leading-tight ${size === "sm" ? "text-[10px]" : "text-sm"} ${owned ? "text-white/90" : "text-white/30"}`}>
-          {owned ? card.name : "???"}
+          {owned ? ct.name : "???"}
         </div>
         {owned && (
           <div className="tabular mt-0.5 font-black" style={{ color: meta.color, fontSize: size === "sm" ? 9 : 12 }}>
@@ -560,6 +579,7 @@ export function CardFace({ card, count, size = "md" }: { card: CardDef; count?: 
 }
 
 function AdCard({ readyAt, onWatchAd }: { readyAt: number; onWatchAd: () => void }) {
+  const { t } = useI18n();
   const [, force] = useState(0);
   useEffect(() => {
     const iv = setInterval(() => force((v) => v + 1), 1000);
@@ -571,9 +591,9 @@ function AdCard({ readyAt, onWatchAd }: { readyAt: number; onWatchAd: () => void
     <div className="overflow-hidden rounded-2xl border border-gold/20 bg-gradient-to-br from-gold/[0.09] via-transparent to-transparent p-3.5">
       <div className="mb-2 flex items-start justify-between gap-2">
         <div>
-          <div className="text-[14px] font-extrabold text-white">Рекламная пауза</div>
+          <div className="text-[14px] font-extrabold text-white">{t.shop.adTitle}</div>
           <div className="text-[11px] font-medium text-white/40">
-            Посмотри рекламу — забери <span className="text-gold">бесплатный контейнер из Тольятти</span>
+            {t.shop.adLead} <span className="text-gold">{t.shop.adFreeCase}</span>
           </div>
         </div>
         <Play className="size-5 shrink-0 text-gold" />
@@ -581,13 +601,13 @@ function AdCard({ readyAt, onWatchAd }: { readyAt: number; onWatchAd: () => void
       <button
         onClick={onWatchAd}
         disabled={!ready}
-        className={`w-full rounded-xl py-2.5 font-display text-[11px] font-black tracking-wide transition ${
+        className={`tap-min w-full rounded-xl py-2.5 font-display text-[11px] font-black tracking-wide transition ${
           ready
             ? "shine-btn bg-gradient-to-r from-amber-500 to-gold text-night hover:brightness-110 active:scale-[0.98]"
             : "border border-white/10 bg-white/5 text-white/35"
         }`}
       >
-        {ready ? "СМОТРЕТЬ РЕКЛАМУ" : `ДОСТУПНО ЧЕРЕЗ ${fmtTime(left)}`}
+        {ready ? t.shop.adWatch : fill(t.shop.adWait, { t: fmtTime(left) })}
       </button>
     </div>
   );
@@ -604,6 +624,7 @@ function LuckTab({
   onWatchAd: () => void;
   adsEnabled: boolean;
 }) {
+  const { t, lang } = useI18n();
   const { s } = game;
   return (
     <div className="flex flex-col gap-3">
@@ -613,7 +634,7 @@ function LuckTab({
             <div className="flex items-center gap-2 rounded-2xl border border-gold/25 bg-gold/10 px-3 py-2.5">
               <Gem className="size-4 shrink-0 text-gold" />
               <span className="text-[12px] font-extrabold text-gold">
-                Удача коллекции: +{Math.round(game.totalCardPct * 100)}% ко всему доходу
+                {fill(t.shop.luckCollection, { x: Math.round(game.totalCardPct * 100) })}
               </span>
             </div>
           )}
@@ -621,7 +642,7 @@ function LuckTab({
             <div className="flex items-center gap-2 rounded-2xl border border-teal-400/25 bg-teal-400/10 px-3 py-2.5">
               <Bot className="size-4 shrink-0 text-teal-300" />
               <span className="text-[12px] font-extrabold text-teal-300">
-                Автокликер быстрее на {Math.round((game.botSpeedMult - 1) * 100)}%
+                {fill(t.shop.botFaster, { x: Math.round((game.botSpeedMult - 1) * 100) })}
               </span>
             </div>
           )}
@@ -634,12 +655,13 @@ function LuckTab({
         const price = game.casePrice(c);
         const afford = s.money >= price;
         const opens = s.caseOpens[c.id] ?? 0;
+        const ct = caseText(lang, c);
         return (
           <div key={c.id} className="glass rounded-2xl p-3.5">
             <div className="mb-1 flex items-start justify-between gap-2">
               <div>
-                <div className="text-[14px] font-extrabold text-white">{c.name}</div>
-                <div className="text-[11px] font-medium text-white/40">{c.tagline}</div>
+                <div className="text-[14px] font-extrabold text-white">{ct.name}</div>
+                <div className="text-[11px] font-medium text-white/40">{ct.tagline}</div>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1">
                 <Dices className="size-5 text-bmw-soft" />
@@ -656,16 +678,16 @@ function LuckTab({
             <button
               onClick={() => onOpenCase(c)}
               disabled={!afford}
-              className={`w-full rounded-xl py-3 font-display text-[12px] font-black tracking-wide transition ${
+              className={`tap-min w-full rounded-xl py-3 font-display text-[12px] font-black tracking-wide transition ${
                 afford
                   ? "shine-btn bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white shadow-[0_10px_30px_-8px_rgba(168,85,247,.7)] hover:brightness-110 active:scale-[0.98]"
                   : "border border-white/10 bg-white/5 text-white/35"
               }`}
             >
-              ОТКРЫТЬ · {fmtMoney(price)}
+              {fill(t.shop.openCase, { price: fmtMoney(price) })}
             </button>
             <p className="mt-1.5 text-center text-[9.5px] font-semibold text-white/25">
-              Каждое открытие дорожает на {Math.round((c.priceGrowth - 1) * 100)}%
+              {fill(t.shop.caseGrowth, { x: Math.round((c.priceGrowth - 1) * 100) })}
             </p>
           </div>
         );
@@ -673,7 +695,7 @@ function LuckTab({
 
       <div className="mt-1">
         <h3 className="mb-2 px-1 text-[10px] font-black uppercase tracking-[0.2em] text-white/40">
-          Коллекция гаража · {Object.keys(s.cards).length}/{CARDS.length}
+          {fill(t.shop.collection, { a: Object.keys(s.cards).length, b: CARDS.length })}
         </h3>
         <div className="grid grid-cols-3 gap-2">
           {CARDS.map((card) => (
@@ -681,7 +703,7 @@ function LuckTab({
           ))}
         </div>
         <p className="mt-2 px-1 text-[10px] font-medium leading-relaxed text-white/30">
-          Дубликаты конвертируются в кэш. Карты дают постоянные бонусы: к доходу или к скорости автокликера.
+          {t.shop.dupNote}
         </p>
       </div>
     </div>

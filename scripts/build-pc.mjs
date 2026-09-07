@@ -36,8 +36,8 @@ let html = await readFile(path.join(tmpDir, "index.html"), "utf8");
 // а грузиться с file:// без интернета он будет с задержкой.
 const before = html.length;
 html = html
-  .replace(/<!--\s*Yandex Games SDK\s*-->\s*/i, "")
-  .replace(/<script[^>]*src="https:\/\/yandex\.ru\/games\/sdk\/v2"[^>]*>\s*<\/script>\s*/i, "");
+  .replace(/<!--\s*Yandex Games SDK[^>]*-->\s*/i, "")
+  .replace(/<script[^>]*src="(\/sdk\.js|https:\/\/yandex\.ru\/games\/sdk\/v2)"[^>]*>\s*<\/script>\s*/i, "");
 if (html.length === before) {
   console.warn("! Тег SDK Яндекс Игр не найден — возможно, index.html изменился. Продолжаю как есть.");
 }
@@ -51,7 +51,8 @@ html = html.replace(
 // Проверки для запуска через file://
 const problems = [];
 if (/src="\//.test(html) || /href="\//.test(html)) problems.push("найдены абсолютные пути src=\"/…\" / href=\"/…\"");
-if (/yandex\.ru\/games\/sdk/.test(html)) problems.push("осталась ссылка на SDK Яндекс Игр");
+if (/yandex\.ru\/games\/sdk/.test(html) || /src="\/sdk\.js"/.test(html))
+  problems.push("осталась ссылка на SDK Яндекс Игр");
 if (/\/src\/main\.tsx/.test(html)) problems.push("осталась ссылка на исходник /src/main.tsx (сборка не инлайнилась)");
 if (problems.length > 0) {
   throw new Error("Файл не годится для запуска двойным кликом: " + problems.join("; "));

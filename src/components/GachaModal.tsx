@@ -5,6 +5,8 @@ import { ChevronDown, ChevronUp, FastForward, Gem } from "lucide-react";
 import { RARITY_META, cardsByRarity, type CardDef, type CaseDef, type Rarity } from "../data/game";
 import type { Reward } from "../game/useGame";
 import { fmtMoney } from "../game/format";
+import { fill, useI18n, type Dict } from "../i18n";
+import { cardText, caseText, rarityLabel } from "../i18n/data";
 import { CardFace } from "./Shop";
 import {
   sfxRewardBoost,
@@ -60,12 +62,12 @@ function randomVisual(c: CaseDef, base: number): Visual {
   return { kind: "card", card: pool[Math.floor(Math.random() * pool.length)] };
 }
 
-function Cell({ v }: { v: Visual }) {
+function Cell({ v, t, lang }: { v: Visual; t: Dict; lang: "ru" | "en" }) {
   if (v.kind === "cash")
     return (
       <div className="flex size-full flex-col items-center justify-center gap-1.5 rounded-xl border border-mint/25 bg-mint/[0.07] p-1.5">
-        <img src={A("/rewards/cash.jpg")} alt="Кэш" className="h-[118px] w-full rounded-lg object-cover" />
-        <span className="text-[9px] font-black uppercase tracking-widest text-mint/80">Кэш</span>
+        <img src={A("/rewards/cash.jpg")} alt={t.gacha.cash} className="h-[118px] w-full rounded-lg object-cover" />
+        <span className="text-[9px] font-black uppercase tracking-widest text-mint/80">{t.gacha.cash}</span>
         {v.amount !== undefined && (
           <span className="tabular -mt-1 text-[10px] font-extrabold text-mint/60">+{fmtMoney(v.amount)}</span>
         )}
@@ -74,11 +76,14 @@ function Cell({ v }: { v: Visual }) {
   if (v.kind === "boost")
     return (
       <div className="flex size-full flex-col items-center justify-center gap-1.5 rounded-xl border border-gold/25 bg-gold/[0.07] p-1.5">
-        <img src={A("/rewards/boost.jpg")} alt="Буст" className="h-[118px] w-full rounded-lg object-cover" />
-        <span className="tabular text-[9px] font-black uppercase tracking-widest text-gold/80">×{v.mult} буст</span>
+        <img src={A("/rewards/boost.jpg")} alt={t.gacha.boostWord} className="h-[118px] w-full rounded-lg object-cover" />
+        <span className="tabular text-[9px] font-black uppercase tracking-widest text-gold/80">
+          {fill(t.gacha.boostCell, { m: v.mult ?? 0 })}
+        </span>
       </div>
     );
   const meta = RARITY_META[v.card!.rarity];
+  const ct = cardText(lang, v.card!);
   return (
     <div
       className="flex size-full flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border p-1.5"
@@ -89,12 +94,12 @@ function Cell({ v }: { v: Visual }) {
       ) : (
         <Gem className="size-8" style={{ color: meta.color }} />
       )}
-      <span className="line-clamp-1 px-0.5 text-[8.5px] font-extrabold text-white/75">{v.card!.name}</span>
+      <span className="line-clamp-1 px-0.5 text-[8.5px] font-extrabold text-white/75">{ct.name}</span>
       <span
         className="rounded-full px-1.5 py-px text-[7px] font-black uppercase tracking-widest"
         style={{ background: `${meta.color}22`, color: meta.color }}
       >
-        {meta.label}
+        {rarityLabel(lang, v.card!.rarity, meta.label)}
       </span>
     </div>
   );
@@ -109,6 +114,7 @@ interface GachaModalProps {
 }
 
 export default function GachaModal({ reward, caseDef, modelBase = 0, onClose }: GachaModalProps) {
+  const { t, lang } = useI18n();
   const [phase, setPhase] = useState<"spin" | "land" | "reveal">("spin");
   const boxRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
@@ -223,40 +229,46 @@ export default function GachaModal({ reward, caseDef, modelBase = 0, onClose }: 
 
   const resultTitle =
     reward.kind === "cash"
-      ? "Денежный приз!"
+      ? t.gacha.cashPrize
       : reward.kind === "boost"
-        ? "Супер-режим!"
+        ? t.gacha.superMode
         : reward.dup
-          ? "Дубликат — в кэш"
-          : "Новая карта коллекции!";
+          ? t.gacha.dupToCash
+          : t.gacha.newCard;
+
+  const caseName = caseText(lang, caseDef).name;
+  const cardName = reward.kind === "card" ? cardText(lang, reward.card).name : "";
+  const cardNote = reward.kind === "card" ? cardText(lang, reward.card).note : "";
+  const cardRarityLabel =
+    reward.kind === "card" ? rarityLabel(lang, reward.card.rarity, RARITY_META[reward.card.rarity].label) : "";
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 grid place-items-center bg-night/85 p-4 backdrop-blur-md"
+      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-night/85 p-4 backdrop-blur-md"
     >
       <motion.div
         initial={{ scale: 0.92, y: 20 }}
         animate={{ scale: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 260, damping: 24 }}
-        className="glass-deep w-full max-w-[760px] overflow-hidden rounded-3xl"
+        className="glass-deep my-auto max-h-full w-full max-w-[760px] overflow-y-auto rounded-3xl"
       >
         <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
           <div>
-            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-fuchsia-400">{caseDef.name}</div>
+            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-fuchsia-400">{caseName}</div>
             <div className="font-display text-lg font-black text-white">
-              {phase === "reveal" ? resultTitle : "Открываем контейнер…"}
+              {phase === "reveal" ? resultTitle : t.gacha.opening}
             </div>
           </div>
           {phase === "spin" && (
             <button
               onClick={skip}
-              className="flex shrink-0 items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-[10.5px] font-black uppercase tracking-widest text-white/45 transition hover:bg-white/10 hover:text-white/80"
+              className="tap-min-sm flex shrink-0 items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-[10.5px] font-black uppercase tracking-widest text-white/45 transition hover:bg-white/10 hover:text-white/80"
             >
               <FastForward className="size-3.5" />
-              Пропустить
+              {t.gacha.skip}
             </button>
           )}
         </div>
@@ -272,7 +284,7 @@ export default function GachaModal({ reward, caseDef, modelBase = 0, onClose }: 
               >
                 {strip.map((v, i) => (
                   <div key={i} style={{ width: CELL_W, height: CELL_H }} className="shrink-0">
-                    <Cell v={v} />
+                    <Cell v={v} t={t} lang={lang} />
                   </div>
                 ))}
               </div>
@@ -308,7 +320,7 @@ export default function GachaModal({ reward, caseDef, modelBase = 0, onClose }: 
             </div>
 
             <div className="mt-4 text-center text-[10.5px] font-bold uppercase tracking-[0.22em] text-white/25">
-              {phase === "spin" ? "Лента крутится…" : "Выпало!"}
+              {phase === "spin" ? t.gacha.spinning : t.gacha.landed}
             </div>
           </div>
         ) : (
@@ -333,7 +345,7 @@ export default function GachaModal({ reward, caseDef, modelBase = 0, onClose }: 
               >
                 <img
                   src={reward.kind === "cash" ? A("/rewards/cash.jpg") : A("/rewards/boost.jpg")}
-                  alt={reward.kind === "cash" ? "Кэш" : "Буст"}
+                  alt={reward.kind === "cash" ? t.gacha.cash : t.gacha.boostWord}
                   className="size-full rounded-3xl object-cover p-1"
                 />
               </motion.div>
@@ -346,16 +358,16 @@ export default function GachaModal({ reward, caseDef, modelBase = 0, onClose }: 
                     className="font-display text-xl font-black"
                     style={{ color: RARITY_META[reward.card.rarity].color }}
                   >
-                    {reward.card.name}
+                    {cardName}
                   </div>
                   <div className="mt-1 text-[13px] font-semibold text-white/55">
                     {reward.dup
-                      ? `Уже есть в коллекции → +${fmtMoney(reward.dupCash)}`
+                      ? fill(t.gacha.dupHave, { x: fmtMoney(reward.dupCash) })
                       : reward.card.botPct
-                        ? `${reward.card.note} · автокликер быстрее на ${Math.round(reward.card.botPct * 100)}% навсегда`
+                        ? fill(t.gacha.cardBotForever, { note: cardNote, x: Math.round(reward.card.botPct * 100) })
                         : reward.card.critPct
-                          ? `${reward.card.note} · шанс крита навсегда выше`
-                          : `${reward.card.note} · +${Math.round(reward.card.pct * 100)}% ко всему доходу навсегда`}
+                          ? fill(t.gacha.cardCritForever, { note: cardNote })
+                          : fill(t.gacha.cardIncomeForever, { note: cardNote, x: Math.round(reward.card.pct * 100) })}
                   </div>
                   <div
                     className="mt-2 inline-block rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest"
@@ -364,27 +376,31 @@ export default function GachaModal({ reward, caseDef, modelBase = 0, onClose }: 
                       color: RARITY_META[reward.card.rarity].color,
                     }}
                   >
-                    {RARITY_META[reward.card.rarity].label}
+                    {cardRarityLabel}
                   </div>
                 </>
               ) : reward.kind === "cash" ? (
                 <>
                   <div className="tabular font-display text-3xl font-black text-mint">+{fmtMoney(reward.amount)}</div>
-                  <div className="mt-1 text-[13px] font-semibold text-white/55">Свежая наличка прямо в карман</div>
+                  <div className="mt-1 text-[13px] font-semibold text-white/55">{t.gacha.cashNote}</div>
                 </>
               ) : (
                 <>
-                  <div className="font-display text-3xl font-black text-gold">×{reward.mult} ко всему доходу</div>
-                  <div className="mt-1 text-[13px] font-semibold text-white/55">Действует {reward.secs} секунд. Жми активнее!</div>
+                  <div className="font-display text-3xl font-black text-gold">
+                    {fill(t.gacha.boostGain, { m: reward.mult })}
+                  </div>
+                  <div className="mt-1 text-[13px] font-semibold text-white/55">
+                    {fill(t.gacha.boostLasts, { s: reward.secs })}
+                  </div>
                 </>
               )}
             </div>
 
             <button
               onClick={onClose}
-              className="shine-btn mt-2 rounded-2xl bg-gradient-to-r from-bmw to-bmw-soft px-10 py-3.5 font-display text-sm font-black tracking-wide text-white shadow-[0_10px_35px_-8px_rgba(28,105,212,.8)] transition hover:brightness-110 active:scale-95"
+              className="shine-btn tap-min mt-2 rounded-2xl bg-gradient-to-r from-bmw to-bmw-soft px-10 py-3.5 font-display text-sm font-black tracking-wide text-white shadow-[0_10px_35px_-8px_rgba(28,105,212,.8)] transition hover:brightness-110 active:scale-95"
             >
-              ЗАБРАТЬ
+              {t.gacha.claim}
             </button>
           </div>
         )}

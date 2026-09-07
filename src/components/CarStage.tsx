@@ -4,6 +4,9 @@ import { ArrowUpRight, BadgeDollarSign, Flame, Lock, Sparkles, Trophy } from "lu
 import { PRESTIGE_BONUS, type CarModel } from "../data/game";
 import { fmtMoney } from "../game/format";
 import { sfxClick } from "../game/sound";
+import { useViewport } from "../game/useViewport";
+import { fill, useI18n } from "../i18n";
+import { modelText } from "../i18n/data";
 import CarImage from "./CarImage";
 
 interface FloatText {
@@ -30,6 +33,8 @@ interface CarStageProps {
   sound: boolean;
   onBuyNext: () => void;
   onPrestige: () => void;
+  /** Компактный режим для низких окон: без описания, меньше отступы. */
+  compact?: boolean;
 }
 
 let floatId = 0;
@@ -56,11 +61,15 @@ export default function CarStage({
   sound,
   onBuyNext,
   onPrestige,
+  compact = false,
 }: CarStageProps) {
+  const { t, lang } = useI18n();
+  const { isFine } = useViewport();
   const [coins, setCoins] = useState<Coin[]>([]);
   const [floats, setFloats] = useState<FloatText[]>([]);
   const [flash, setFlash] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
+  const mt = modelText(lang, model);
 
   const spawnFloat = useCallback(
     (text: string, x: number, y: number, crit = false, auto = false) => {
@@ -71,20 +80,42 @@ export default function CarStage({
     []
   );
 
-  const handlePointer = useCallback(
-    (e: React.PointerEvent) => {
-      const rect = stageRef.current?.getBoundingClientRect();
+  const doClickAt = useCallback(
+    (x: number, y: number) => {
       const { gain, crit } = onClick();
       if (sound) sfxClick(crit);
       if (crit) {
         setFlash(true);
         setTimeout(() => setFlash(false), 180);
       }
-      const x = rect ? e.clientX - rect.left : 200;
-      const y = rect ? e.clientY - rect.top : 200;
       spawnFloat(`+${fmtMoney(gain)}`, x + (Math.random() * 40 - 20), y - 10, crit);
     },
     [onClick, sound, spawnFloat]
+  );
+
+  const handlePointer = useCallback(
+    (e: React.PointerEvent) => {
+      const rect = stageRef.current?.getBoundingClientRect();
+      const x = rect ? e.clientX - rect.left : 200;
+      const y = rect ? e.clientY - rect.top : 200;
+      doClickAt(x, y);
+    },
+    [doClickAt]
+  );
+
+  // Клавиатурное управление на десктопе (п. 1.6.2.4): Пробел/Enter кликают.
+  // Не зависит от раскладки — используются только коды клавиш.
+  const handleKey = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.code !== "Space" && e.code !== "Enter") return;
+      e.preventDefault();
+      if (e.repeat && e.code === "Enter") return;
+      const rect = stageRef.current?.getBoundingClientRect();
+      const x = rect ? rect.width * (0.35 + Math.random() * 0.3) : 200;
+      const y = rect ? rect.height * (0.35 + Math.random() * 0.3) : 200;
+      doClickAt(x, y);
+    },
+    [doClickAt]
   );
 
   // авто-флоаты от автокликера — чтобы гараж жил своей жизнью
@@ -119,7 +150,7 @@ export default function CarStage({
   const progress = next ? Math.min(1, money / next.price) : 1;
 
   return (
-    <section className="relative flex min-h-[520px] flex-col overflow-hidden rounded-3xl border border-line bg-panel lg:min-h-0">
+    <section className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-line bg-panel">
       {/* фон */}
       <div className="stage-grid absolute inset-0" />
       <div
@@ -142,58 +173,66 @@ export default function CarStage({
       </AnimatePresence>
 
       {/* шапка сцены */}
-      <div className="relative z-10 flex flex-wrap items-start justify-between gap-3 p-5 sm:p-6">
+      <div className={`relative z-10 flex flex-wrap items-start justify-between gap-3 ${compact ? "p-3" : "p-5 sm:p-6"}`}>
         <div className="min-w-0">
           <div className="mb-1.5 flex items-center gap-2">
             <span
               className="rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-[0.2em]"
               style={{ background: `${model.tint}22`, color: model.tint }}
             >
-              {model.era}
+              {mt.era}
             </span>
-            <span className="text-[11px] font-semibold text-white/40">{model.years}</span>
+            <span className="text-[11px] font-semibold text-white/40">{mt.years}</span>
           </div>
           <AnimatePresence mode="wait">
             <motion.h1
-              key={model.id}
+              key={model.id + lang}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -12 }}
               transition={{ duration: 0.3 }}
-              className="font-display text-balance text-2xl font-black leading-tight text-white sm:text-4xl"
+              className={`font-display text-balance font-black leading-tight text-white ${
+                compact ? "text-xl" : "text-2xl sm:text-4xl"
+              }`}
             >
               {model.name}
             </motion.h1>
           </AnimatePresence>
-          <AnimatePresence mode="wait">
-            <motion.p
-              key={model.id + "-d"}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.3, delay: 0.08 }}
-              className="mt-2 max-w-lg text-[13px] font-medium leading-relaxed text-white/55"
-            >
-              {model.desc}
-            </motion.p>
-          </AnimatePresence>
+          {!compact && (
+            <AnimatePresence mode="wait">
+              <motion.p
+                key={model.id + lang + "-d"}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3, delay: 0.08 }}
+                className="mt-2 max-w-lg text-[13px] font-medium leading-relaxed text-white/55"
+              >
+                {mt.desc}
+              </motion.p>
+            </AnimatePresence>
+          )}
         </div>
-        <div className="hidden shrink-0 items-center gap-2 rounded-2xl border border-white/10 bg-night/50 px-4 py-3 backdrop-blur sm:flex">
-          <BadgeDollarSign className="size-5 text-mint" />
-          <div className="leading-tight">
-            <div className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/40">База клика</div>
-            <div className="tabular font-display text-sm font-bold text-mint">{fmtMoney(model.base)}</div>
+        {!compact && (
+          <div className="hidden shrink-0 items-center gap-2 rounded-2xl border border-white/10 bg-night/50 px-4 py-3 backdrop-blur sm:flex">
+            <BadgeDollarSign className="size-5 text-mint" />
+            <div className="leading-tight">
+              <div className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/40">{t.stage.clickBase}</div>
+              <div className="tabular font-display text-sm font-bold text-mint">{fmtMoney(model.base)}</div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* зона клика */}
       <div
         ref={stageRef}
         onPointerDown={handlePointer}
-        className="relative z-10 flex flex-1 cursor-pointer touch-manipulation select-none items-center justify-center p-4 sm:p-6"
+        onKeyDown={handleKey}
+        tabIndex={0}
+        className="stage-kb relative z-10 flex min-h-[180px] flex-1 cursor-pointer touch-manipulation select-none items-center justify-center p-4 sm:p-6"
         role="button"
-        aria-label={`Кликнуть по ${model.name}`}
+        aria-label={fill(t.stage.clickAria, { name: model.name })}
       >
         <AnimatePresence mode="wait">
           <motion.div
@@ -249,7 +288,7 @@ export default function CarStage({
               textShadow: f.crit ? "0 0 24px rgba(245,197,66,.8)" : "0 2px 12px rgba(0,0,0,.8)",
             }}
           >
-            {f.crit && "КРИТ "}
+            {f.crit && t.stage.critPrefix}
             {f.text}
           </motion.span>
         ))}
@@ -273,21 +312,22 @@ export default function CarStage({
           </motion.div>
         ))}
 
-        <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] font-bold uppercase tracking-[0.28em] text-white/25">
-          Кликай по машине
+        <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-bold uppercase tracking-[0.28em] text-white/25">
+          {t.stage.clickHint}
+          {isFine && ` · ${t.stage.kbHint}`}
         </div>
 
         {/* крит-инфо */}
         <div className="pointer-events-none absolute left-4 top-2 z-20 flex items-center gap-1.5 rounded-full border border-gold/25 bg-night/50 px-2.5 py-1 backdrop-blur">
           <Flame className="size-3 text-gold" />
           <span className="tabular text-[10px] font-black text-gold/90">
-            Крит {Math.round(critChance * 100)}% · ×{critMult}
+            {fill(t.stage.critBadge, { p: Math.round(critChance * 100), m: critMult })}
           </span>
         </div>
       </div>
 
       {/* CTA выкупа / новый круг */}
-      <div className="relative z-10 border-t border-line bg-night/60 p-4 backdrop-blur sm:p-5">
+      <div className={`relative z-10 border-t border-line bg-night/60 backdrop-blur ${compact ? "p-3" : "p-4 sm:p-5"}`}>
         {next ? (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -297,7 +337,8 @@ export default function CarStage({
               <div className="min-w-0 flex-1">
                 <div className="mb-1 flex items-center justify-between gap-2 text-[11px] font-semibold">
                   <span className="truncate text-white/70">
-                    Следующая: <span className="text-white">{next.name}</span>
+                    {t.stage.nextLabel}
+                    <span className="text-white">{next.name}</span>
                   </span>
                   <span className="tabular shrink-0 text-white/45">
                     {fmtMoney(money)} <span className="text-white/25">/ {fmtMoney(next.price)}</span>
@@ -315,7 +356,7 @@ export default function CarStage({
             <button
               onClick={onBuyNext}
               disabled={!afford}
-              className={`shrink-0 rounded-2xl px-6 py-3.5 font-display text-sm font-black tracking-wide transition ${
+              className={`tap-min shrink-0 rounded-2xl px-6 py-3.5 font-display text-sm font-black tracking-wide transition ${
                 afford
                   ? "shine-btn bg-gradient-to-r from-bmw to-bmw-soft text-white shadow-[0_10px_35px_-8px_rgba(28,105,212,.8)] hover:brightness-110 active:scale-95"
                   : "border border-white/10 bg-white/5 text-white/35"
@@ -323,7 +364,7 @@ export default function CarStage({
             >
               {afford ? (
                 <span className="flex items-center gap-2">
-                  ВЫКУПИТЬ <ArrowUpRight className="size-4" />
+                  {t.stage.buy} <ArrowUpRight className="size-4" />
                 </span>
               ) : (
                 <span className="flex items-center gap-2">
@@ -337,18 +378,18 @@ export default function CarStage({
             <div className="flex items-center gap-3">
               <Trophy className="size-8 shrink-0 text-gold" />
               <div>
-                <div className="font-display text-sm font-black text-gold">ВСЯ ИСТОРИЯ BMW СОБРАНА</div>
+                <div className="font-display text-sm font-black text-gold">{t.stage.allCollected}</div>
                 <div className="text-[11px] font-semibold text-white/45">
-                  Круг {prestige + 1} пройден. Продай коллекцию — начни заново с весомым бонусом.
+                  {fill(t.stage.lapComplete, { n: prestige + 1 })}
                 </div>
               </div>
             </div>
             <button
               onClick={onPrestige}
-              className="shine-btn flex shrink-0 items-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 to-gold px-5 py-3.5 font-display text-[12px] font-black tracking-wide text-night shadow-[0_10px_35px_-8px_rgba(245,197,66,.7)] transition hover:brightness-110 active:scale-95"
+              className="shine-btn tap-min flex shrink-0 items-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 to-gold px-5 py-3.5 font-display text-[12px] font-black tracking-wide text-night shadow-[0_10px_35px_-8px_rgba(245,197,66,.7)] transition hover:brightness-110 active:scale-95"
             >
               <Sparkles className="size-4" />
-              НОВЫЙ КРУГ · +{Math.round(PRESTIGE_BONUS * 100)}% НАВСЕГДА
+              {fill(t.stage.newLapForever, { p: Math.round(PRESTIGE_BONUS * 100) })}
             </button>
           </div>
         ) : null}

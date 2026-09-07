@@ -7,6 +7,8 @@ import { buyProduct, consumeProduct, getPlayerName, listPurchases, openAuthDialo
 import { VIP_PERK_ID, productMetaById } from "../data/products";
 import { fmtMoney } from "../game/format";
 import { sfxBuy, sfxFail, sfxWin } from "../game/sound";
+import { fill, useI18n } from "../i18n";
+import { productEffect } from "../i18n/data";
 
 /**
  * Витрина инап-покупок. Каталог, цены и иконка портальной валюты — строго из
@@ -27,6 +29,7 @@ export default function PremiumModal({
   /** вызывается после успешной выдачи — App сохранит прогресс (п. 1.9/1.13.3) */
   onSynced: () => void;
 }) {
+  const { t, lang } = useI18n();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [doneId, setDoneId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -50,8 +53,15 @@ export default function PremiumModal({
     try {
       const purchase = await buyProduct(product.id);
       if (!purchase) {
-        setError("Покупка не завершена: окно оплаты закрыто или недостаточно средств.");
+        setError(t.premium.errClosed);
         sfxFail();
+        return;
+      }
+      if (game.isTokenGranted(purchase.purchaseToken)) {
+        // выдача уже была (повторный вызов после обрыва сети) — только консумируем
+        if (meta?.kind !== "permanent") await consumeProduct(purchase.purchaseToken);
+        setDoneId(product.id);
+        setTimeout(() => setDoneId(null), 2200);
         return;
       }
       // выдача товара строго соответствует описанию (п. 1.13.5)
@@ -60,6 +70,11 @@ export default function PremiumModal({
       } else {
         game.grantCash(game.cashPileAmount());
       }
+      game.markTokenGranted(purchase.purchaseToken);
+      // сначала фиксируем выдачу в данных игрока, потом консумируем (п. 1.13.1):
+      // если сеть оборвётся, стартовая проверка не выдаст товар повторно
+      await new Promise((r) => setTimeout(r, 60));
+      onSynced();
       // расходные покупки консумируем сразу после выдачи (п. 1.13.1)
       if (meta?.kind !== "permanent") {
         await consumeProduct(purchase.purchaseToken);
@@ -71,9 +86,8 @@ export default function PremiumModal({
       confetti({ particleCount: 110, spread: 70, origin: { y: 0.6 }, colors: ["#f5c542", "#ffffff", "#1c69d4"] });
       setDoneId(product.id);
       setTimeout(() => setDoneId(null), 2200);
-      onSynced();
     } catch {
-      setError("Ошибка обработки покупки. Попробуйте ещё раз.");
+      setError(t.premium.errFailed);
       sfxFail();
     } finally {
       setBusyId(null);
@@ -84,6 +98,8 @@ export default function PremiumModal({
     const ok = await openAuthDialog();
     if (ok) setAuthorized(true);
   };
+
+  const playerName = authorized ? getPlayerName() : "";
 
   return (
     <motion.div
@@ -107,13 +123,13 @@ export default function PremiumModal({
               <Crown className="size-5 text-gold" />
             </div>
             <div>
-              <div className="text-[10px] font-black uppercase tracking-[0.25em] text-gold/80">Яндекс Игры · Инап-покупки</div>
-              <h2 className="font-display text-lg font-black text-white">ОФИС ПРОДВИНУТОГО ПЕРЕКУПА</h2>
+              <div className="text-[10px] font-black uppercase tracking-[0.25em] text-gold/80">{t.premium.overTitle}</div>
+              <h2 className="font-display text-lg font-black text-white">{t.premium.title}</h2>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="grid size-8 shrink-0 place-items-center rounded-lg text-white/40 transition hover:bg-white/10 hover:text-white"
+            className="tap-min-sm grid size-8 shrink-0 place-items-center rounded-lg text-white/40 transition hover:bg-white/10 hover:text-white"
           >
             <X className="size-4" />
           </button>
@@ -124,13 +140,13 @@ export default function PremiumModal({
             <div className="flex items-center gap-3 rounded-2xl border border-bmw/25 bg-bmw/[0.08] p-3">
               <LogIn className="size-4 shrink-0 text-bmw-soft" />
               <p className="flex-1 text-[11.5px] font-semibold leading-snug text-white/65">
-                Войдите через Яндекс ID — покупки и прогресс сохранятся на всех ваших устройствах.
+                {t.premium.loginText}
               </p>
               <button
                 onClick={() => void login()}
-                className="shrink-0 rounded-xl bg-bmw px-3.5 py-2 text-[11px] font-black text-white transition hover:brightness-110 active:scale-95"
+                className="tap-min-sm shrink-0 rounded-xl bg-bmw px-3.5 py-2 text-[11px] font-black text-white transition hover:brightness-110 active:scale-95"
               >
-                ВОЙТИ
+                {t.premium.loginBtn}
               </button>
             </div>
           )}
@@ -140,6 +156,7 @@ export default function PremiumModal({
             const isOwned = owned[product.id] || (meta?.kind === "permanent" && !!game.s.perks[product.id]);
             const busy = busyId === product.id;
             const done = doneId === product.id;
+            const effect = meta ? productEffect(lang, product.id, meta.effect) : "";
             return (
               <div
                 key={product.id}
@@ -155,19 +172,19 @@ export default function PremiumModal({
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[13px] font-extrabold text-white">{product.title}</div>
                   <div className="mt-0.5 text-[11px] font-medium leading-snug text-white/50">
-                    {product.description || meta?.effect}
+                    {product.description || effect}
                   </div>
                   {meta && (
                     <div className="mt-1 text-[11px] font-bold text-mint/80">
-                      {product.id === "cash_pile" ? `Сейчас это +${fmtMoney(game.cashPileAmount())} наличными. ` : ""}
-                      {meta.effect}
+                      {product.id === "cash_pile" ? fill(t.premium.cashNow, { x: fmtMoney(game.cashPileAmount()) }) : ""}
+                      {effect}
                     </div>
                   )}
                 </div>
                 <button
                   disabled={busy || isOwned}
                   onClick={() => void buy(product)}
-                  className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2.5 font-display text-[12px] font-black tracking-wide transition active:scale-95 ${
+                  className={`tap-min-sm flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2.5 font-display text-[12px] font-black tracking-wide transition active:scale-95 ${
                     isOwned
                       ? "border border-mint/30 bg-mint/10 text-mint"
                       : done
@@ -177,7 +194,7 @@ export default function PremiumModal({
                 >
                   {isOwned ? (
                     <>
-                      <Check className="size-3.5" /> КУПЛЕНО
+                      <Check className="size-3.5" /> {t.premium.owned}
                     </>
                   ) : busy ? (
                     <Loader2 className="size-4 animate-spin" />
@@ -196,9 +213,9 @@ export default function PremiumModal({
           {error && <div className="rounded-xl border border-mred/30 bg-mred/10 px-3.5 py-2.5 text-[11.5px] font-bold text-mred">{error}</div>}
 
           <p className="px-1 text-[10px] font-medium leading-relaxed text-white/30">
-            Оплата проходит через защищённый платёжный шлюз Яндекс Игр в портальной валюте
-            {authorized && getPlayerName() ? ` — вы вошли как ${getPlayerName()}` : ""}. Выдача — мгновенно, постоянные
-            покупки действуют на всех устройствах вашего аккаунта.
+            {t.premium.payNoteA}
+            {playerName ? fill(t.premium.payNoteUser, { name: playerName }) : ""}
+            {t.premium.payNoteB}
           </p>
         </div>
       </motion.div>

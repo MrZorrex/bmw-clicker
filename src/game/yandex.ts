@@ -52,8 +52,11 @@ export interface YaSdk {
   payments?: YaPayments;
   on(event: string, cb: () => void): void;
   off?(event: string, cb: () => void): void;
+  /** Имена платформенных событий (HISTORY_BACK, EXIT, ACCOUNT_SELECTION_DIALOG_*). */
+  EVENTS?: Record<string, string>;
+  dispatchEvent?(eventName: string, detail?: object): Promise<unknown>;
   auth?: { openAuthDialog(): Promise<void> };
-  environment?: { i18n?: { lang?: string } };
+  environment?: { i18n?: { lang?: string; tld?: string } };
   isAvailableMethod?(name: string): Promise<boolean>;
   adv?: {
     showFullscreenAdv(opts: { callbacks?: FullscreenCallbacks }): void;
@@ -85,6 +88,15 @@ let ysdk: YaSdk | null = null;
 let player: YaPlayer | null = null;
 let readyCalled = false;
 let gameplayRunning = false;
+
+/**
+ * Код языка интерфейса платформы (ISO 639-1: 'ru', 'en', ...).
+ * Читается строго при запуске — так работает автоопределение языка (п. 2.14):
+ * индикатор I18N на debug-панели зеленеет именно в момент чтения
+ * ysdk.environment.i18n.lang на старте.
+ */
+let sdkLang: string | null = null;
+export const getSdkLang = () => sdkLang;
 
 export const isYandex = () => ysdk !== null;
 
@@ -189,6 +201,14 @@ export async function initYandex(): Promise<boolean> {
     if (!window.YaGames) return false;
     ysdk = await window.YaGames.init();
 
+    // Автоопределение языка при запуске (п. 2.14). Читаем всегда — даже если
+    // игрок раньше сохранил свой выбор: индикатор I18N должен зеленеть на старте.
+    try {
+      sdkLang = ysdk.environment?.i18n?.lang ?? null;
+    } catch {
+      sdkLang = null;
+    }
+
     // Надёжное хранилище вместо localStorage (актуально для iOS, п. «Потеря прогресса на iOS»)
     try {
       const safeStorage = await ysdk.getStorage();
@@ -255,6 +275,31 @@ export function onPlatformPause(pause: () => void, resume: () => void) {
   }
 }
 
+// ── Смена игрового аккаунта ──────────────────────────────────
+// У игрока может быть два прогресса (гостевой и под логином) — платформа
+// показывает диалог выбора. Пока он открыт, облачную синхронизацию ставим
+// на паузу; после закрытия игра перезапрашивает игрока (см. App).
+
+let accountDialogOpen = false;
+
+/** Подписка на открытие/закрытие диалога выбора аккаунта. */
+export function onAccountDialog(onOpen: () => void, onClose: () => void) {
+  try {
+    const ev = ysdk?.EVENTS;
+    if (!ysdk || !ev?.ACCOUNT_SELECTION_DIALOG_OPENED || !ev?.ACCOUNT_SELECTION_DIALOG_CLOSED) return;
+    ysdk.on(ev.ACCOUNT_SELECTION_DIALOG_OPENED, () => {
+      accountDialogOpen = true;
+      onOpen();
+    });
+    ysdk.on(ev.ACCOUNT_SELECTION_DIALOG_CLOSED, () => {
+      accountDialogOpen = false;
+      onClose();
+    });
+  } catch {
+    /* noop */
+  }
+}
+
 // ── Облачные сохранения ──────────────────────────────────────
 
 const CLOUD_KEY = "save";
@@ -279,7 +324,7 @@ export async function cloudLoad<T>(): Promise<T | null> {
 }
 
 export async function cloudSave(state: unknown, flush = false): Promise<void> {
-  if (!player) return;
+  if (!player || accountDialogOpen) return;
   try {
     await player.setData({ [CLOUD_KEY]: JSON.stringify(state) }, flush);
   } catch {
@@ -301,7 +346,7 @@ export async function showRewardedVideo(opts: {
 }) {
   try {
     if (!ysdk?.adv) throw new Error("adv unavailable");
-    ysdk.adv.showRewardedVideo({
+    const cbs: RewardedCallbacks = {
       onOpen: () => setSoundSuspended(true),
       onRewarded: opts.onRewarded,
       onClose: () => {
@@ -312,7 +357,10 @@ export async function showRewardedVideo(opts: {
         setSoundSuspended(false);
         opts.onError?.(e);
       },
-    });
+    };
+    // Передаём колбэки и плоско, и вложенно в `callbacks`: в разных версиях
+    // документации фигурируют обе формы — так обработчики сработают в любом случае.
+    ysdk.adv.showRewardedVideo({ ...cbs, callbacks: { ...cbs } } as never);
   } catch (e) {
     setSoundSuspended(false);
     opts.onError?.(e);
@@ -321,17 +369,21 @@ export async function showRewardedVideo(opts: {
 
 /**
  * Полноэкранная реклама (Interstitial). Показывается в логических паузах
- * и не прерывает сразу после запуска.
+ * (после значимых событий, не по «голому» таймеру — антифрод РСЯ) и не
+ * прерывает игру сразу после запуска. onClose получает wasShown.
  */
-export async function showInterstitial(opts?: { onClose?: () => void; onError?: (e: unknown) => void }) {
+export async function showInterstitial(opts?: {
+  onClose?: (wasShown?: boolean) => void;
+  onError?: (e: unknown) => void;
+}) {
   try {
     if (!ysdk?.adv) throw new Error("adv unavailable");
     ysdk.adv.showFullscreenAdv({
       callbacks: {
         onOpen: () => setSoundSuspended(true),
-        onClose: () => {
+        onClose: (wasShown?: boolean) => {
           setSoundSuspended(false);
-          opts?.onClose?.();
+          opts?.onClose?.(wasShown);
         },
         onError: (e) => {
           setSoundSuspended(false);

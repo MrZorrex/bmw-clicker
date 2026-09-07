@@ -82,6 +82,37 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/* Безопасные отступы под чёлку/жесты в полноэкранном режиме мобильных (п. 1.6.1.1, 1.10.1) */
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.px-safe {
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+
+/* Видимый фокус клик-зоны для клавиатурного управления на ПК (п. 1.6.2.4) */
+.stage-kb:focus {
+  outline: none;
+}
+.stage-kb:focus-visible {
+  outline: 2px solid rgba(90, 169, 255, 0.85);
+  outline-offset: -2px;
+}
+
+/* Тач-устройства: минимальные тап-зоны интерактива (п. 1.8) */
+@media (pointer: coarse) {
+  .tap-min {
+    min-height: 44px;
+  }
+  .tap-min-sm {
+    min-height: 40px;
+  }
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
