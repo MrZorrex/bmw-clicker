@@ -8,31 +8,94 @@ export type { Lang, Dict };
 export { LANGS, RU_LANG_CODES, isLang } from "./types";
 
 /**
- * Выбор языка игры по коду интерфейса (п. 2.10, 2.14 + резервный набор языков):
- * русский — для ru/be/kk/uk/uz, английский — для всех остальных.
+ * Часть сохранения, важная для выбора языка (п. 2.14).
+ * `langPinnedOn` — код языка платформы в момент РУЧНОГО выбора игрока. Он нужен,
+ * чтобы отличить «игрок сам выбрал язык» от «значение языка попало в сейв вместе
+ * с автосохранением прогресса»: второе не имеет права перекрывать
+ * автоопределение при следующем запуске.
  */
-export function mapToLang(code: string | null | undefined): Lang {
-  const c = (code ?? "").toLowerCase().split("-")[0];
-  if (c === "en") return "en";
-  if (RU_LANG_CODES.includes(c)) return "ru";
-  if (!c && typeof navigator !== "undefined") {
-    const nav = navigator.language.toLowerCase().split("-")[0];
-    if (nav === "en") return "en";
-    if (RU_LANG_CODES.includes(nav)) return "ru";
-  }
-  // Неизвестный код интерфейса — резервный английский (кроме пустого кода:
-  // там уже проверен язык браузера, по умолчанию оставляем русский).
-  return c ? "en" : "ru";
+export interface LangSave {
+  lang?: unknown;
+  langPinnedOn?: unknown;
+}
+
+/** Нормализация кода языка: `ru-RU` / `TR` → `ru` / `tr` (ISO 639-1). */
+export function langCodeOf(code: string | null | undefined): string {
+  return (code ?? "").toLowerCase().split(/[-_]/)[0];
 }
 
 /**
- * Стартовый язык: сохранённый игроком > автоопределение SDK > язык браузера.
- * Автоопределение читается при запуске (п. 2.14), выбор игрока — приоритетнее.
+ * Выбор языка игры по коду языка интерфейса платформы (п. 2.10, 2.14).
+ * Резервный набор языков из доки: `ru` для be/kk/uk/uz, `en` для остальных.
  */
-export function resolveLang(saved: unknown, sdkLang: string | null | undefined): Lang {
-  if (isLang(saved)) return saved;
-  if (sdkLang) return mapToLang(sdkLang);
+export function mapToLang(code: string | null | undefined): Lang {
+  let c = langCodeOf(code);
+  // Пустой код (игры вне платформы) — берём язык браузера.
+  if (!c && typeof navigator !== "undefined") c = langCodeOf(navigator.language);
+  // Язык неизвестен вовсе → русский: на нём игра написана.
+  if (!c) return "ru";
+  return RU_LANG_CODES.includes(c) ? "ru" : "en";
+}
+
+/**
+ * Язык, выбранный игроком вручную (п. 6.9). Уважается только если язык
+ * платформы с момента выбора не менялся: иначе автоопределение (п. 2.14)
+ * оказалось бы навсегда перебито устаревшим сейвом.
+ */
+function pinnedLangOf(save: LangSave | null | undefined, sdkLang: string | null): Lang | null {
+  if (!save || !isLang(save.lang) || typeof save.langPinnedOn !== "string") return null;
+  if (sdkLang && langCodeOf(save.langPinnedOn) !== langCodeOf(sdkLang)) return null;
+  return save.lang;
+}
+
+/** Любой валидный язык из сейва — резерв вне платформы (п. 2.14 допускает кеш выбора). */
+function savedLangOf(save: LangSave | null | undefined): Lang | null {
+  return save && isLang(save.lang) ? save.lang : null;
+}
+
+/**
+ * Стартовый язык игры — единственный источник правды для main.tsx и useGame.
+ *
+ * Порядок (п. 2.14 + 6.9):
+ * 1. Язык, выбранный игроком вручную, — если язык платформы не менялся.
+ * 2. Иначе — код языка из SDK (`ysdk.environment.i18n.lang`), то есть
+ *    автоопределение. На платформе оно важнее языка из сейва: в сейв язык
+ *    попадает и при автосохранении, иначе проверка переключения языка на
+ *    debug-панели (SDK mocks) давала бы «язык не переключился».
+ * 3. Вне платформы (локальная разработка, ПК-сборка) — сохранённый язык,
+ *    затем язык браузера.
+ * 4. Неизвестный код — резервный набор ru/en.
+ */
+export function resolveStartLang(sdkLang: string | null, saves: (LangSave | null | undefined)[] = []): Lang {
+  if (sdkLang) {
+    for (const s of saves) {
+      const pinned = pinnedLangOf(s, sdkLang);
+      if (pinned) return pinned;
+    }
+    return mapToLang(sdkLang);
+  }
+  for (const s of saves) {
+    const saved = savedLangOf(s);
+    if (saved) return saved;
+  }
   return mapToLang(null);
+}
+
+/**
+ * Значение `langPinnedOn` при ручном выборе языка игроком. Вне платформы
+ * кода языка нет — пишем пустую строку: флаг «выбрано вручную» важен и для
+ * ПК-сборки (там сейв всегда приоритетнее автоопределения).
+ */
+export const pinLangFor = (sdkLang: string | null): string => sdkLang ?? "";
+
+/** Чтение языка из локального сохранения — для загрузочной заглушки до старта React. */
+export function readLocalLangSave(key: string): LangSave | null {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as LangSave) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Подстановка {placeholders} в строки словаря. */
@@ -60,13 +123,22 @@ export function dictOf(lang: Lang): Dict {
   return lang === "en" ? en : ru;
 }
 
-/** Применяет язык к документу: <html lang>, title, meta description, формат чисел. */
+/**
+ * Применяет язык к документу: <html lang>, title, meta description, текст
+ * загрузочной заглушки и формат чисел. Вызывается на старте (п. 2.14 — до
+ * первого рендера) и при ручном выборе языка (п. 6.9).
+ */
 export function applyLangToDocument(lang: Lang): void {
   try {
     document.documentElement.lang = lang;
+    document.documentElement.setAttribute("translate", "no");
     document.title = dictOf(lang).meta.gameName;
     const meta = document.querySelector('meta[name="description"]');
     if (meta) meta.setAttribute("content", dictOf(lang).meta.description);
+    // Загрузочная заглушка живёт в index.html и видна до готовности React —
+    // её подпись обязана следовать за языком (см. примеры в п. 2.14).
+    const bootText = document.querySelector("#boot .t");
+    if (bootText) bootText.textContent = dictOf(lang).meta.boot;
   } catch {
     /* noop */
   }

@@ -22,7 +22,7 @@ import {
 } from "../data/game";
 import { setSoundEnabled, sfxBuy, sfxWin } from "./sound";
 import { cloudSave, getCloudSnapshot, getSdkLang } from "./yandex";
-import { isLang, resolveLang, type Lang } from "../i18n";
+import { pinLangFor, resolveStartLang, type Lang } from "../i18n";
 import { CASH_PILE_FALLBACK_BASE_MULT, CASH_PILE_SHARE, VIP_PERK_BONUS, VIP_PERK_ID } from "../data/products";
 
 // ─── Типы ────────────────────────────────────────────────────
@@ -47,8 +47,15 @@ export interface GameState {
   lastSeen: number;
   /** Постоянные перки из инап-покупок: id товара → 1. Переживают новые круги. */
   perks: Record<string, number>;
-  /** Язык интерфейса. Сохраняется и имеет приоритет над автоопределением SDK. */
+  /** Язык интерфейса. На платформе его задаёт автоопределение SDK (п. 2.14). */
   lang: Lang;
+  /**
+   * Отметка «язык выбран игроком вручную» (п. 6.9) + код языка платформы на
+   * момент выбора. Нужна, чтобы автоопределение при следующем запуске не
+   * перекрывалось автосохранённым значением: в сейв `lang` попадает всегда.
+   * `null` — ручного выбора не было, язык всегда берётся из SDK.
+   */
+  langPinnedOn: string | null;
   /**
    * Токены покупок, выдача по которым уже произведена. Нужны, чтобы при
    * обрыве сети между выдачей и консумацией не выдать товар дважды:
@@ -83,7 +90,8 @@ const initialState = (): GameState => ({
   introSeen: false,
   lastSeen: Date.now(),
   perks: {},
-  lang: resolveLang(undefined, getSdkLang()),
+  lang: resolveStartLang(getSdkLang()),
+  langPinnedOn: null,
   grantedTokens: {},
 });
 
@@ -114,12 +122,20 @@ function loadState(): { state: GameState; isFresh: boolean } {
 
   if (!best) return { state: base, isFresh: true };
 
+  // Язык (п. 2.14): из сейва уважаем только ручной выбор игрока (п. 6.9). Если в
+  // сейве лежит автоопределённое значение, при следующем запуске язык снова
+  // берётся из SDK — иначе проверка переключения языка на debug-панели не проходит.
+  const sdkLang = getSdkLang();
+  const lang = resolveStartLang(sdkLang, [cloud, local]);
+  const pinSource = [cloud, local].find((s) => typeof s?.langPinnedOn === "string");
+
   return {
     state: {
       ...base,
       ...best,
       modelIndex: Math.min(Math.max(0, best.modelIndex ?? 0), MODELS.length - 1),
-      lang: isLang(best.lang) ? best.lang : base.lang,
+      lang,
+      langPinnedOn: pinSource?.langPinnedOn ?? null,
       grantedTokens: best.grantedTokens ?? {},
       perks: best.perks ?? {},
     },
@@ -501,10 +517,31 @@ export function useGame() {
     setS((p) => (p.grantedTokens[token] ? p : { ...p, grantedTokens: { ...p.grantedTokens, [token]: 1 } }));
   }, []);
 
-  /** Смена языка интерфейса (п. 6.9). Сохраняется автосейвом и на выходе. */
-  const setLang = useCallback((l: Lang) => {
-    setS((p) => (p.lang === l ? p : { ...p, lang: l }));
-  }, []);
+  /**
+   * Смена языка игроком вручную (п. 6.9). Запоминаем не только сам язык, но и
+   * код языка платформы на момент выбора: пока он не изменился, выбор игрока
+   * приоритетнее автоопределения; при смене языка платформы (в т. ч. моком на
+   * debug-панели модерации) снова выигрывает SDK (п. 2.14).
+   */
+  const setLang = useCallback(
+    (l: Lang) => {
+      const pinnedOn = pinLangFor(getSdkLang());
+      setS((p) => (p.lang === l && p.langPinnedOn === pinnedOn ? p : { ...p, lang: l, langPinnedOn: pinnedOn }));
+    },
+    []
+  );
+
+  // Выбор языка — настройка, а не прогресс: пишем сейв сразу после коммита
+  // (в самом setLang нельзя — там состояние ещё старое), не дожидаясь тика
+  // автосейва: игрок мог закрыть вкладку через секунду после переключения.
+  const langBootstrapped = useRef(false);
+  useEffect(() => {
+    if (!langBootstrapped.current) {
+      langBootstrapped.current = true;
+      return; // первый рендер — язык пришёл из сейва/SDK, сохранять нечего
+    }
+    saveNow();
+  }, [s.lang, s.langPinnedOn, saveNow]);
 
   const canPrestige = s.modelIndex === MODELS.length - 1;
 
@@ -513,6 +550,7 @@ export function useGame() {
       ...initialState(),
       sound: p.sound,
       lang: p.lang,
+      langPinnedOn: p.langPinnedOn,
       grantedTokens: p.grantedTokens,
       introSeen: true,
       prestige: p.prestige + 1,
@@ -527,8 +565,8 @@ export function useGame() {
     try {
       localStorage.removeItem(SAVE_KEY);
     } catch { /* noop */ }
-    // язык — настройка, а не прогресс: переживает полный сброс
-    setS((p) => ({ ...initialState(), lang: p.lang }));
+    // язык и отметка о ручном выборе — настройки, а не прогресс: переживают полный сброс
+    setS((p) => ({ ...initialState(), lang: p.lang, langPinnedOn: p.langPinnedOn }));
   }, []);
 
   const totalCardPct = useMemo(

@@ -19,7 +19,7 @@ export const en: Dict = {
     logo: "RESELLER",
     tagline: "flipper simulator",
     premiumTitle: "Premium shop",
-    langTitle: "Язык · Language",
+    langTitle: "Language",
     soundOn: "Mute sound",
     soundOff: "Unmute sound",
     resetTitle: "Reset progress",
