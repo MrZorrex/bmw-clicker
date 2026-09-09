@@ -94,11 +94,14 @@ const ALLOWED = new Set(["https://sdk.games.s3.yandex.net/sdk.js"]);
 const forbidden = [...new Set(resourceUrls)].filter((u) => !ALLOWED.has(u));
 check("нет внешних ресурсов (п. 8.4.2)", forbidden.length === 0, forbidden.join(", "));
 
-// ── 8. Это сборка ДЛЯ Яндекса, а не ПК-версия ─────────────────────
+// ── 8. В бандле нет следов SDK-вырезанной офлайн-сборки ────────────
+// Отдельной ПК-версии без SDK больше нет (раньше её маркировали комментарием
+// «НЕ ЗАГРУЖАТЬ В ЯНДЕКС» и подменяли URL SDK заглушкой data:). Проверяем,
+// что в файл для Яндекса не просочились эти следы.
 check(
-  "не перепутан файл с pc-build (там SDK вырезан)",
-  !html.includes("автономная версия для ПК") && !html.includes("НЕ ЗАГРУЖАТЬ В ЯНДЕКС"),
-  "в Консоль грузится publish/bmw-clicker-yandex.zip, НЕ pc-build/index.html"
+  "нет следов SDK-вырезанной офлайн-сборки",
+  !html.includes("НЕ ЗАГРУЖАТЬ В ЯНДЕКС") && !html.includes("data:text/javascript,void 0"),
+  "похоже, в dist попал файл с вырезанным SDK — пересоберите: npm run build"
 );
 
 // ── 9. Single-file: нет локальных ассетов рядом ────────────────────

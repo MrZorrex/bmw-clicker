@@ -305,6 +305,26 @@ export function initYandex(): Promise<boolean> {
 
 async function doInitYandex(): Promise<boolean> {
   try {
+    // Единый файл игры (index.html) открывается и двойным кликом (file://),
+    // и на любом хостинге как обычная страница. Платформы там нет в принципе:
+    // SDK с file:// недоступен, а YaGames.init() без родительского iframe Яндекса
+    // некому отвечать. Не дёргаем сеть и не ждём таймауты — сразу честный
+    // офлайн-режим (localStorage, язык по сейву/браузеру). Внутри iframe
+    // Яндекс Игр (сам черновик, превью с debug-панелью, свой домен через iframe)
+    // проверка не срабатывает — SDK инициализируется как обычно (/sdk.js, п. 1.1).
+    let inIframe = false;
+    try {
+      inIframe = typeof window !== "undefined" && window.self !== window.top;
+    } catch {
+      inIframe = true; // доступ к top закрыт — вероятно, платформенный iframe
+    }
+    const onDisk = typeof location !== "undefined" && location.protocol === "file:";
+    if (onDisk || !inIframe) {
+      ysdk = null;
+      langResolved = true;
+      emitSdkLang();
+      return false;
+    }
     // Скрипт /sdk.js должен быть загружен ДО YaGames.init() (п. 1.1):
     // сначала тег в index.html, при его отсутствии — динамическая догрузка.
     const hasSdk = await ensureSdkScript();
