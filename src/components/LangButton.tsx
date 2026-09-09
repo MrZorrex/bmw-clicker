@@ -3,14 +3,16 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, Globe } from "lucide-react";
 import { LANGS, useI18n, type Lang } from "../i18n";
 
-const LANG_META: Record<Lang, { flag: string; name: string }> = {
-  ru: { flag: "🇷🇺", name: "Русский" },
-  en: { flag: "🇬🇧", name: "English" },
+const LANG_META: Record<Lang, { code: string; name: string }> = {
+  ru: { code: "РУС", name: "Русский" },
+  en: { code: "ENG", name: "English" },
 };
 
 /**
  * Переключатель языка (п. 6.9): универсальная иконка глобуса, языки подписаны
- * флагами и собственными названиями — переключиться можно без знания текущего языка.
+ * кодами и собственными названиями — переключиться можно без знания текущего языка.
+ * Текстовые коды (РУС/ENG) вместо эмодзи-флагов: на Windows/некоторых устройствах
+ * флаги не отображаются и выглядят как буквы «RU»/«GB», а ENG виден везде одинаково.
  */
 export default function LangButton() {
   const { lang, setLang, t } = useI18n();
@@ -69,7 +71,9 @@ export default function LangButton() {
                   lang === l ? "bg-bmw/15 text-white" : "text-white/60 hover:bg-white/5 hover:text-white"
                 }`}
               >
-                <span className="text-base leading-none">{LANG_META[l].flag}</span>
+                <span className="grid size-7 shrink-0 place-items-center rounded-md border border-white/10 bg-white/5 text-[10px] font-black tracking-widest text-white/70">
+                  {LANG_META[l].code}
+                </span>
                 <span className="flex-1">{LANG_META[l].name}</span>
                 {lang === l && <Check className="size-4 text-bmw-soft" />}
               </button>
