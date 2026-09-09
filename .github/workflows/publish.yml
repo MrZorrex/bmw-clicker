@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - arena/01a03a99-bmw-clicker
+      - arena/01a087fb-bmw-clicker
 
 permissions:
   contents: write
@@ -62,7 +62,7 @@ jobs:
         run: |
           if gh release view latest-build >/dev/null 2>&1; then
             gh release upload latest-build publish/bmw-clicker-yandex.zip --clobber
-            gh release edit latest-build --title "Перекуп BMW — сборка для Яндекс Игр" --notes "Автоматическая актуальная сборка ветки arena/01a03a99-bmw-clicker. Скачайте bmw-clicker-yandex.zip и загрузите архив в черновик Яндекс Игр." --latest
+            gh release edit latest-build --title "Перекуп BMW — сборка для Яндекс Игр" --notes "Автоматическая актуальная сборка ветки arena/01a087fb-bmw-clicker. Скачайте bmw-clicker-yandex.zip и загрузите архив в черновик Яндекс Игр." --latest
           else
-            gh release create latest-build publish/bmw-clicker-yandex.zip --title "Перекуп BMW — сборка для Яндекс Игр" --notes "Автоматическая актуальная сборка ветки arena/01a03a99-bmw-clicker. Скачайте bmw-clicker-yandex.zip и загрузите архив в черновик Яндекс Игр." --latest
+            gh release create latest-build publish/bmw-clicker-yandex.zip --title "Перекуп BMW — сборка для Яндекс Игр" --notes "Автоматическая актуальная сборка ветки arena/01a087fb-bmw-clicker. Скачайте bmw-clicker-yandex.zip и загрузите архив в черновик Яндекс Игр." --latest
           fi

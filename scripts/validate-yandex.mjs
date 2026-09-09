@@ -49,15 +49,38 @@ if (sdkTag) {
 
 // ── 2. Инициализация SDK в коде (п. 1.1) ───────────────────────────
 check("YaGames.init() в коде", html.includes("YaGames.init"), "без инициализации платформа не увидит SDK");
+
+// Ни цельного адреса внутреннего хранилища Яндекса (S3), ни его фрагментов.
+// Сканер Консоли ловит даже адрес, разрезанный на части (массив строк + join):
+//   - цельная строка → отказ прямо при загрузке
+//     («Файл содержит URL-адрес внутреннего хранилища сервиса»);
+//   - фрагменты → замечание к релизу («Обнаружена ссылка на сервисное
+//     хранилище»): сканер игнорирует кавычки и запятые между частями host-а.
+// Поэтому проверяем и сырые фрагменты, и текст без знаков препинания
+// («нормализованный») — так ловится любая склейка адреса из кусков.
+const STORAGE_FRAGMENTS = [
+  "sdk.games.s3.yandex.net",
+  "sdk.games.s3",
+  "games.s3.yandex",
+  "s3.yandex.net",
+  "sdk.games",
+  "games.s3",
+  "s3.yandex",
+  "yandex.net/sdk",
+  ".net/sdk.js",
+];
+const htmlLower = html.toLowerCase();
+const htmlNormalized = htmlLower.replace(/[^a-z0-9]/g, "");
+const foundFragments = STORAGE_FRAGMENTS.filter((f) => htmlLower.includes(f));
 check(
-  "нет цельного адреса внутреннего хранилища Яндекса",
-  !html.includes("sdk.games.s3.yandex.net"),
-  'иначе Консоль отклонит архив: «Файл содержит URL-адрес внутреннего хранилища сервиса». Запасной путь должен собираться из частей в ensureSdkScript()'
+  "нет адреса сервисного хранилища Яндекса (целиком и по частям)",
+  foundFragments.length === 0 && !htmlNormalized.includes("sdkgamess3yandexnet"),
+  `найдено: ${foundFragments.join(", ") || "склейка из фрагментов"}. Консоль даёт отказ при загрузке («Файл содержит URL-адрес внутреннего хранилища сервиса») и замечание к релизу («Обнаружена ссылка на сервисное хранилище») даже за адрес, разрезанный на части. Абсолютный адрес SDK вообще не должен попадать в сборку для архива; для iframe-сборки задавайте VITE_YA_SDK_FALLBACK (см. src/game/yandex.ts)`
 );
 check(
-  "запасная догрузка SDK собирается в рантайме (свой домен)",
-  html.includes(".net/sdk.js"),
-  "фрагмент массива в ensureSdkScript(): абсолютный адрес есть, но цельной строкой в файле не лежит"
+  "запасная догрузка SDK отключена (сборка для архива)",
+  !html.includes(".net/sdk.js") && !htmlLower.includes("sdk_fallback"),
+  "в сборке для архива не должно быть запасного абсолютного адреса SDK (VITE_YA_SDK_FALLBACK задаётся только для iframe-сборки)"
 );
 
 // ── 3. Загрузка и разметка геймплея (п. 1.19.2–1.19.4) ─────────────
@@ -95,7 +118,7 @@ const resourceUrls = [
   ...html.matchAll(/@import\s+["'](https?:\/\/[^"']+)["']/g),
   ...html.matchAll(/\bimport\(\s*["'](https?:\/\/[^"']+)["']/g),
 ].map((m) => m[1]);
-const ALLOWED = new Set(); // внешних ресурсов быть не должно вовсе (запасный путь SDK собирается из частей в рантайме)
+const ALLOWED = new Set(); // внешних ресурсов быть не должно вовсе (запасного абсолютного адреса SDK в сборке для архива нет)
 const forbidden = [...new Set(resourceUrls)].filter((u) => !ALLOWED.has(u));
 check("нет внешних ресурсов (п. 8.4.2)", forbidden.length === 0, forbidden.join(", "));
 
@@ -147,6 +170,29 @@ if (zipIdx >= 0) {
       );
       const zipMb = (await stat(abs)).size / 1024 / 1024;
       check(`размер архива ${zipMb.toFixed(2)} МБ < 100 МБ`, zipMb < 100, "п. 1.21");
+
+      // Сканер Консоли проверяет КАЖДЫЙ файл архива на ссылки на сервисное
+      // хранилище (S3) — целиком и в виде склеек из фрагментов. Делаем так же:
+      // каждый файл распаковываем, ищем сырые фрагменты и «нормализованный»
+      // host (текст без знаков препинания — ловит массив/join-склейки).
+      const SCAN_PY = [
+        "import re, sys, zipfile",
+        "raw = " + JSON.stringify(STORAGE_FRAGMENTS),
+        "zf = zipfile.ZipFile(sys.argv[1])",
+        "bad = []",
+        "for info in zf.infolist():",
+        "    text = zf.read(info.filename).decode('utf-8', 'ignore').lower()",
+        "    norm = re.sub(r'[^a-z0-9]', '', text)",
+        "    if any(f in text for f in raw) or 'sdkgamess3yandexnet' in norm:",
+        "        bad.append(info.filename)",
+        "print('\\n'.join(bad))",
+      ].join("\n");
+      const scanOut = execFileSync("python3", ["-c", SCAN_PY, abs], { encoding: "utf8" }).trim();
+      check(
+        "в архиве нет ссылок на сервисное хранилище (все файлы)",
+        scanOut === "",
+        `сканер Консоли найдёт то же самое в файлах: ${scanOut.split("\n").join(", ")}`
+      );
     } catch (e) {
       check(`архив ${zipPath} открывается`, false, String(e?.message ?? e).split("\n")[0]);
     }
