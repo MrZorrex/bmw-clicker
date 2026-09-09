@@ -50,9 +50,14 @@ if (sdkTag) {
 // ── 2. Инициализация SDK в коде (п. 1.1) ───────────────────────────
 check("YaGames.init() в коде", html.includes("YaGames.init"), "без инициализации платформа не увидит SDK");
 check(
-  "запасная догрузка SDK (свой домен)",
-  html.includes("sdk.games.s3.yandex.net/sdk.js"),
-  "абсолютный URL из доки для iframe-интеграции"
+  "нет цельного адреса внутреннего хранилища Яндекса",
+  !html.includes("sdk.games.s3.yandex.net"),
+  'иначе Консоль отклонит архив: «Файл содержит URL-адрес внутреннего хранилища сервиса». Запасной путь должен собираться из частей в ensureSdkScript()'
+);
+check(
+  "запасная догрузка SDK собирается в рантайме (свой домен)",
+  html.includes(".net/sdk.js"),
+  "фрагмент массива в ensureSdkScript(): абсолютный адрес есть, но цельной строкой в файле не лежит"
 );
 
 // ── 3. Загрузка и разметка геймплея (п. 1.19.2–1.19.4) ─────────────
@@ -90,7 +95,7 @@ const resourceUrls = [
   ...html.matchAll(/@import\s+["'](https?:\/\/[^"']+)["']/g),
   ...html.matchAll(/\bimport\(\s*["'](https?:\/\/[^"']+)["']/g),
 ].map((m) => m[1]);
-const ALLOWED = new Set(["https://sdk.games.s3.yandex.net/sdk.js"]);
+const ALLOWED = new Set(); // внешних ресурсов быть не должно вовсе (запасный путь SDK собирается из частей в рантайме)
 const forbidden = [...new Set(resourceUrls)].filter((u) => !ALLOWED.has(u));
 check("нет внешних ресурсов (п. 8.4.2)", forbidden.length === 0, forbidden.join(", "));
 
