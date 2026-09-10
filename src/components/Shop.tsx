@@ -11,7 +11,7 @@ import {
   Coffee,
   Cpu,
   Dices,
-  Droplets,
+  Droplet,
   Eye,
   Flame,
   Flashlight,
@@ -65,7 +65,7 @@ import { cardText, caseText, modelText, upgradeText } from "../i18n/data";
 import CarImage from "./CarImage";
 
 const ICONS: Record<string, LucideIcon> = {
-  Droplets, Sparkles, Flashlight, Paintbrush, Armchair, Shield, Gauge, Camera,
+  Droplet, Sparkles, Flashlight, Paintbrush, Armchair, Shield, Gauge, Camera,
   Megaphone, GraduationCap, Handshake, Briefcase, Store, Network, Ship, Plane,
   MousePointer2, ToggleRight, Bot, Brain, Server, Eye, Swords,
 };

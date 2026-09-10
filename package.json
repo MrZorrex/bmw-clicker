@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node scripts/publish-root.mjs",
+    "build": "vite build",
     "build:yandex": "npm run build && node scripts/validate-yandex.mjs && node scripts/pack.mjs && node scripts/validate-yandex.mjs --zip publish/bmw-clicker-yandex.zip",
     "validate:yandex": "node scripts/validate-yandex.mjs",
     "preview": "vite preview"
@@ -29,7 +29,6 @@
     "sharp": "^0.35.4",
     "tailwindcss": "4.1.17",
     "typescript": "5.9.3",
-    "vite": "7.3.2",
-    "vite-plugin-singlefile": "2.3.0"
+    "vite": "7.3.2"
   }
 }

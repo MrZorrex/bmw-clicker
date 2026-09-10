@@ -358,7 +358,7 @@ export interface UpgradeDef {
 }
 
 export const CLICK_UPGRADES: UpgradeDef[] = [
-  { id: "wash", name: "Мойка до блеска", flavor: "Чистая тачка продаёт сама себя", pct: 0.12, cost: 40, growth: 4.6, icon: "Droplets" },
+  { id: "wash", name: "Мойка до блеска", flavor: "Чистая тачка продаёт сама себя", pct: 0.12, cost: 40, growth: 4.6, icon: "Droplet" },
   { id: "dryclean", name: "Химчистка салона", flavor: "Запах нового авто — из баллончика", pct: 0.18, cost: 650, growth: 4.7, icon: "Sparkles" },
   { id: "polish", name: "Полировка фар", flavor: "Взгляд уверенный, как у акулы", pct: 0.3, cost: 12_000, growth: 4.8, icon: "Flashlight" },
   { id: "paint", name: "Локальная покраска", flavor: "Ни одного скола. Почти", pct: 0.55, cost: 190_000, growth: 4.9, icon: "Paintbrush" },

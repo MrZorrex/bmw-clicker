@@ -85,23 +85,17 @@ declare global {
 }
 
 /**
- * Абсолютный адрес SDK — обязателен при интеграции через свой домен (iframe),
- * дока: https://yandex.ru/dev/games/doc/ru/sdk/sdk-about.html#connect
- *
- * На сервере Яндекса скрипт уже подключён тегом `<script src="/sdk.js">`
- * в index.html, а этот URL — запасной путь: если глобала `YaGames` нет
- * (свой домен, сбой загрузки `/sdk.js`), догружаем SDK динамически —
- * дока называет тег и динамическую загрузку «двумя равноправными способами».
- *
- * ВАЖНО: адрес собирается из частей в рантайме и НЕ должен попадать в сборку
- * цельной строкой. Консоль Яндекс Игр при загрузке архива сканирует файлы
- * и отклоняет те, где есть ссылки на внутреннее хранилище сервиса
- * (отказ «Файл содержит URL-адрес внутреннего хранилища сервиса»): этот
- * абсолютный путь как раз живёт в их S3, поэтому для загрузки через архив
- * в файле его быть не должно. Минификатор массив с `.join()` не сворачивает,
- * так что и в минифицированном бандле цельного адреса нет.
+ * Про подключение SDK: на сервере Яндекса SDK уже подключён тегом
+ * `<script src="/sdk.js">` в index.html (см. шаблон dev.html). Если глобала
+ * `YaGames` нет (локальная разработка, двойной клик по файлу), игра честно
+ * уходит в офлайн-режим — динамической догрузки SDK по абсолютному адресу
+ * в коде НЕТ специально: Консоль отклоняет архив с адресом внутреннего
+ * хранилища сервиса в любом виде — ни цельной строкой, ни по частям
+ * («Файл содержит URL-адрес внутреннего хранилища сервиса» /
+ * «Обнаружена ссылка на сервисное хранилище»). Для интеграции «свой домен
+ * (iframe)» абсолютный адрес из документации ставится обычным тегом
+ * `<script>` в хостинг-HTML на своём домене, а не в исходниках игры.
  */
-const SDK_ABS_URL = ["https://sdk", ".games", ".s3", ".yandex", ".net/sdk.js"].join("");
 
 /**
  * Промис с таймаутом: висящий вызов SDK не должен вешать старт игры.
@@ -112,7 +106,7 @@ const SDK_ABS_URL = ["https://sdk", ".games", ".s3", ".yandex", ".net/sdk.js"].j
 export function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`yandex-sdk-timeout: ${label}`)), ms);
+    timer = setTimeout(() => reject(new Error(`ysdk-timeout: ${label}`)), ms);
   });
   const raced = Promise.race([promise, timeout]) as Promise<T>;
   // `finally` создаёт новый промис — возвращаем его, чтобы таймер точно снимался.
@@ -120,31 +114,12 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, label: string): 
 }
 
 /**
- * Гарантирует наличие `window.YaGames`: если тег `/sdk.js` не сработал,
- * динамически подгружаем SDK с абсолютного адреса. true — SDK доступен.
+ * Проверяет наличие `window.YaGames` (тег `/sdk.js` из index.html).
+ * Динамической догрузки SDK здесь нет специально (см. комментарий выше):
+ * абсолютному адресу внутреннего хранилища не место в сборке для архива.
  */
-let sdkScriptTried = false;
 async function ensureSdkScript(): Promise<boolean> {
   if (typeof window === "undefined") return false;
-  if (window.YaGames) return true;
-  if (sdkScriptTried) return !!window.YaGames;
-  sdkScriptTried = true;
-  try {
-    await withTimeout(
-      new Promise<void>((resolve, reject) => {
-        const s = document.createElement("script");
-        s.src = SDK_ABS_URL;
-        s.async = true;
-        s.onload = () => resolve();
-        s.onerror = () => reject(new Error("sdk-script-load-failed"));
-        document.head.appendChild(s);
-      }),
-      6000,
-      "sdk-script"
-    );
-  } catch {
-    return !!window.YaGames;
-  }
   return !!window.YaGames;
 }
 
