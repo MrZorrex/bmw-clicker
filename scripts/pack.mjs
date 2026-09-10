@@ -20,13 +20,6 @@ function crc32(buffer) {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-function dosDateTime(date) {
-  const year = Math.max(1980, date.getFullYear());
-  const time = (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2);
-  const day = ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate();
-  return { time, day };
-}
-
 async function collect(dir, prefix = "") {
   const files = [];
   for (const name of (await readdir(dir)).sort()) {
@@ -53,7 +46,10 @@ for (const file of files) {
   const compressed = deflateRawSync(data, { level: 9 });
   const name = Buffer.from(file.relative, "utf8");
   const crc = crc32(data);
-  const { time, day } = dosDateTime(file.info.mtime);
+  // Фиксированная дата (эпоха ZIP 1980-01-01): архив детерминирован,
+  // SHA-256 в PUBLISH.md не плавает между пересборками.
+  const time = 0;
+  const day = 33;
 
   const local = Buffer.alloc(30);
   local.writeUInt32LE(0x04034b50, 0);
