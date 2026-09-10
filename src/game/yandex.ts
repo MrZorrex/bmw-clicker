@@ -85,32 +85,17 @@ declare global {
 }
 
 /**
- * Запасной абсолютный адрес SDK — нужен ТОЛЬКО интеграции «свой домен (iframe)»,
- * дока: https://yandex.ru/dev/games/doc/ru/sdk/sdk-about.html#connect
- *
- * ВАЖНО: в сборке для архива Консоли этого адреса быть не должно ВООБЩЕ —
- * ни цельной строкой, ни фрагментами. Консоль Яндекс Игр сканирует файлы
- * загруженного архива на ссылки на внутреннее хранилище сервиса (S3):
- *   - цельная строка → отказ прямо при загрузке
- *     («Файл содержит URL-адрес внутреннего хранилища сервиса»);
- *   - адрес, разрезанный на части (массив строк + join и т.п.) → замечание
- *     модерации «Обнаружена ссылка на сервисное хранилище»: сканер умеет
- *     игнорировать кавычки и запятые между частями host-имени.
- * Поэтому по умолчанию адреса в бандле нет вовсе — на сервере Яндекса SDK
- * уже подключён тегом `<script src="/sdk.js">` в index.html, а если глобала
- * `YaGames` нет, игра честно уходит в офлайн-режим.
- *
- * Для сборки под свой домен адрес передаётся переменной окружения при сборке
- * (значение — абсолютный путь к sdk.js из документации):
- *
- *   VITE_YA_SDK_FALLBACK="https://…" npm run build
- *
- * Vite подставляет значение статически; без переменной в код попадает null
- * и динамическая догрузка отключается. Такой билд нельзя грузить в Консоль
- * архивом — только хостить у себя.
+ * Про подключение SDK: на сервере Яндекса SDK уже подключён тегом
+ * `<script src="/sdk.js">` в index.html (см. шаблон dev.html). Если глобала
+ * `YaGames` нет (локальная разработка, двойной клик по файлу), игра честно
+ * уходит в офлайн-режим — динамической догрузки SDK по абсолютному адресу
+ * в коде НЕТ специально: Консоль отклоняет архив с адресом внутреннего
+ * хранилища сервиса (S3) в любом виде — ни цельной строкой, ни по частям
+ * («Файл содержит URL-адрес внутреннего хранилища сервиса» /
+ * «Обнаружена ссылка на сервисное хранилище»). Для интеграции «свой домен
+ * (iframe)» абсолютный адрес из документации ставится обычным тегом
+ * `<script>` в хостинг-HTML на своём домене, а не в исходниках игры.
  */
-const SDK_ABS_URL: string | null =
-  (import.meta.env.VITE_YA_SDK_FALLBACK as string | undefined)?.trim() || null;
 
 /**
  * Промис с таймаутом: висящий вызов SDK не должен вешать старт игры.
@@ -121,7 +106,7 @@ const SDK_ABS_URL: string | null =
 export function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`yandex-sdk-timeout: ${label}`)), ms);
+    timer = setTimeout(() => reject(new Error(`ysdk-timeout: ${label}`)), ms);
   });
   const raced = Promise.race([promise, timeout]) as Promise<T>;
   // `finally` создаёт новый промис — возвращаем его, чтобы таймер точно снимался.
@@ -129,34 +114,12 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, label: string): 
 }
 
 /**
- * Гарантирует наличие `window.YaGames`: если тег `/sdk.js` не сработал
- * и задан запасной адрес (сборка для своего домена), динамически догружаем
- * SDK. В сборке для архива Консоли запасного адреса нет — возвращаем false,
- * и игра уходит в офлайн-режим. true — SDK доступен.
+ * Проверяет наличие `window.YaGames` (тег `/sdk.js` из index.html).
+ * Динамической догрузки SDK здесь нет специально (см. комментарий выше):
+ * абсолютному адресу внутреннего хранилища не место в сборке для архива.
  */
-let sdkScriptTried = false;
 async function ensureSdkScript(): Promise<boolean> {
   if (typeof window === "undefined") return false;
-  if (window.YaGames) return true;
-  if (sdkScriptTried) return !!window.YaGames;
-  sdkScriptTried = true;
-  if (!SDK_ABS_URL) return false;
-  try {
-    await withTimeout(
-      new Promise<void>((resolve, reject) => {
-        const s = document.createElement("script");
-        s.src = SDK_ABS_URL;
-        s.async = true;
-        s.onload = () => resolve();
-        s.onerror = () => reject(new Error("sdk-script-load-failed"));
-        document.head.appendChild(s);
-      }),
-      6000,
-      "sdk-script"
-    );
-  } catch {
-    return !!window.YaGames;
-  }
   return !!window.YaGames;
 }
 

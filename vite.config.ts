@@ -25,6 +25,18 @@ export default defineConfig({
     react(),
     tailwindcss(),
     viteSingleFile(),
+    // Вырезаем HTML-комментарии из сборки: в шаблоне dev.html они объясняют
+    // подключение SDK, а в шиппинг-файле им делать нечего — заодно сканер
+    // Консоли не увидит рядом слова «SDK»/«адрес»/«iframe» и путь исходника.
+    // Хук выполняется до инлайна бандла, поэтому стирает только комментарии
+    // шаблона и не может задеть содержимое скриптов.
+    {
+      name: "strip-html-comments",
+      apply: "build",
+      transformIndexHtml(html) {
+        return html.replace(/<!--[\s\S]*?-->/g, "");
+      },
+    },
     // Переименовываем выход сборки dev.html → index.html: так и dist, и корневой
     // файл называются одинаково (validate/pack/publish-root ждут index.html).
     {

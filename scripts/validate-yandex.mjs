@@ -75,12 +75,35 @@ const foundFragments = STORAGE_FRAGMENTS.filter((f) => htmlLower.includes(f));
 check(
   "нет адреса сервисного хранилища Яндекса (целиком и по частям)",
   foundFragments.length === 0 && !htmlNormalized.includes("sdkgamess3yandexnet"),
-  `найдено: ${foundFragments.join(", ") || "склейка из фрагментов"}. Консоль даёт отказ при загрузке («Файл содержит URL-адрес внутреннего хранилища сервиса») и замечание к релизу («Обнаружена ссылка на сервисное хранилище») даже за адрес, разрезанный на части. Абсолютный адрес SDK вообще не должен попадать в сборку для архива; для iframe-сборки задавайте VITE_YA_SDK_FALLBACK (см. src/game/yandex.ts)`
+  `найдено: ${foundFragments.join(", ") || "склейка из фрагментов"}. Консоль даёт отказ при загрузке («Файл содержит URL-адрес внутреннего хранилища сервиса») и замечание к релизу («Обнаружена ссылка на сервисное хранилище») даже за адрес, разрезанный на части. Абсолютный адрес SDK вообще не должен попадать в сборку для архива (для iframe он ставится тегом в хостинг-HTML, см. src/game/yandex.ts)`
 );
 check(
-  "запасная догрузка SDK отключена (сборка для архива)",
-  !html.includes(".net/sdk.js") && !htmlLower.includes("sdk_fallback"),
-  "в сборке для архива не должно быть запасного абсолютного адреса SDK (VITE_YA_SDK_FALLBACK задаётся только для iframe-сборки)"
+  "в сборке нет запасного адреса SDK",
+  !html.includes(".net/sdk.js") && !htmlLower.includes("sdk_fallback") && !htmlLower.includes("sdk_abs"),
+  "абсолютный адрес SDK (S3) нельзя хранить в исходниках ни целиком, ни по частям — Консоль отклоняет такой архив"
+);
+// Сканер Консоли ловит и короткие сочетания: "/s3", "s3/", s3 на границах
+// слов. В base64 картинок (~1.5 МБ) они возникают случайно, в path-данных
+// иконки Droplets было "s3" — поэтому картинки чистятся скриптом
+// scripts/scrub-base64.mjs, иконка заменена на Droplet, а здесь проверяем
+// весь файл: каждое "s3" обязано быть внутри [A-Za-z0-9]-последовательности.
+const s3edge = htmlLower.match(/(^|[^a-z0-9])s3|s3([^a-z0-9]|$)/g);
+check(
+  "нет s3 рядом с разделителями (ложные срабатывания сканера)",
+  !s3edge,
+  s3edge
+    ? `найдено ${s3edge.length}: ${[...new Set(s3edge)].slice(0, 5).join(" ")}. Прогоните: node scripts/scrub-base64.mjs && npm run build`
+    : ""
+);
+// Связки слов SDK/Yandex/Games в шиппинг-файле: легитимны только упоминания
+// платформы в UI покупок ("Yandex Games", "Yandex ID") и глобал YaGames —
+// но не "Games SDK", "SDK … Yandex", "yandex-sdk" и т.п. HTML-комментарии
+// из сборки вырезаются (см. vite.config.ts), метка таймаута — "ysdk-timeout".
+const sdkAdj = htmlLower.match(/(games|yandex)[^a-z0-9]{0,3}sdk|sdk[^a-z0-9]{0,3}(games|yandex)/g);
+check(
+  "нет связок SDK/Yandex/Games в шиппинг-файле",
+  !sdkAdj,
+  sdkAdj ? `найдено: ${[...new Set(sdkAdj)].slice(0, 5).join(" ")}` : ""
 );
 
 // ── 3. Загрузка и разметка геймплея (п. 1.19.2–1.19.4) ─────────────
