@@ -31,21 +31,27 @@ npm run build:yandex
 
 ## Скачать готовую сборку
 
-Самый простой путь — корневой `index.html` из ветки `arena/01a08cbd-bmw-clicker`:
-это и есть проверенная сборка (байт в байт совпадает с `dist/index.html` из
-`npm run build:yandex`, все 24 проверки валидатора пройдены, ссылок на сервисное
-хранилище в пакете нет — см. чек-лист ниже). Откройте файл по ссылке, нажмите
-**Raw**, скачайте кнопкой Download и загрузите в Консоль как файл игры.
-Важно: нужен именно исходный файл (2 076 089 байт, SHA-256
-`cd783907…4616f0`), а не сохранённая HTML-страница предпросмотра с GitHub:
+Самый простой путь — готовый ZIP из ветки `arena/01a08cbd-bmw-clicker`
+(собран командой `npm run build:yandex`, все 26 проверок валидатора пройдены,
+ссылок на сервисное хранилище в пакете нет — см. чек-лист ниже).
+Откройте файл по ссылке и скачайте кнопкой Download — архив грузится
+в Консоль целиком, распаковывать не нужно. Контроль: 1 301 660 байт,
+SHA-256 `66720d4b…3de43`:
+
+https://github.com/MrZorrex/bmw-clicker/blob/arena/01a08cbd-bmw-clicker/publish/bmw-clicker-yandex.zip
+
+Запасной вариант — корневой `index.html` из той же ветки (тот же файл,
+что лежит в корне архива; 2 076 089 байт, SHA-256 `cd783907…4616f0`):
+кнопка Raw → Download, в Консоль — как файл игры:
 
 https://github.com/MrZorrex/bmw-clicker/blob/arena/01a08cbd-bmw-clicker/index.html
 
-Альтернативы: собрать ZIP локально (`npm ci && npm run build:yandex` →
-`publish/bmw-clicker-yandex.zip`, в Консоль грузится целиком, распаковывать
-не нужно) или забрать ZIP из постоянного Release `latest-build` / артефактов
-workflow **Build Yandex Games release** на вкладке **Actions**, когда они обновлены
-(см. `.github/workflows/publish.yml`).
+> Для разработчиков: `publish/bmw-clicker-yandex.zip` закоммичен в репозиторий
+> специально (обычно `publish/` игнорируется) — это дистрибутив для Консоли.
+> После любых правок пересоберите (`npm run build:yandex`) и закоммитьте его
+> вместе с корневым `index.html`, иначе в ветке останется несвежая сборка.
+> Release `latest-build` и артефакты workflow **Build Yandex Games release**
+> (см. `.github/workflows/publish.yml`) — альтернативный канал, когда обновлены.
 
 ## Что уже сделано в коде (соответствие требованиям)
 
