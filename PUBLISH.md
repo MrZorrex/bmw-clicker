@@ -31,16 +31,21 @@ npm run build:yandex
 
 ## Скачать готовую сборку
 
-Проверенная сборка публикуется в постоянном Release `latest-build`
-(ZIP собран командой `npm run build:yandex`, все проверки валидатора пройдены,
-ссылок на сервисное хранилище в пакете нет — см. чек-лист ниже):
+Самый простой путь — корневой `index.html` из ветки `arena/01a08cbd-bmw-clicker`:
+это и есть проверенная сборка (байт в байт совпадает с `dist/index.html` из
+`npm run build:yandex`, все 24 проверки валидатора пройдены, ссылок на сервисное
+хранилище в пакете нет — см. чек-лист ниже). Откройте файл по ссылке, нажмите
+**Raw**, скачайте кнопкой Download и загрузите в Консоль как файл игры.
+Важно: нужен именно исходный файл (2 041 700 байт, SHA-256
+`24f958cf…9d693d`), а не сохранённая HTML-страница предпросмотра с GitHub:
 
-https://github.com/MrZorrex/bmw-clicker/releases/download/latest-build/bmw-clicker-yandex.zip
+https://github.com/MrZorrex/bmw-clicker/blob/arena/01a08cbd-bmw-clicker/index.html
 
-Также ZIP доступен как артефакт последнего запуска workflow **Build Yandex Games release**
-на вкладке **Actions** (см. `.github/workflows/publish.yml`; workflow можно запустить
-вручную через Run workflow на ветке `arena/01a08cbd-bmw-clicker`). В Консоль Яндекс Игр
-загружается ZIP целиком, распаковывать его перед загрузкой не нужно.
+Альтернативы: собрать ZIP локально (`npm ci && npm run build:yandex` →
+`publish/bmw-clicker-yandex.zip`, в Консоль грузится целиком, распаковывать
+не нужно) или забрать ZIP из постоянного Release `latest-build` / артефактов
+workflow **Build Yandex Games release** на вкладке **Actions**, когда они обновлены
+(см. `.github/workflows/publish.yml`).
 
 ## Что уже сделано в коде (соответствие требованиям)
 
